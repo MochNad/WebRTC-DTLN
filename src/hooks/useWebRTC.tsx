@@ -40,9 +40,21 @@ export const useWebRTC = () => {
     }));
 
     newPc.ontrack = (event) => {
-      event.streams[0].getTracks().forEach((track) => {
-        newRemoteStream.addTrack(track);
-      });
+      // Add tracks from the first stream to our remote stream
+      if (event.streams && event.streams[0]) {
+        event.streams[0].getTracks().forEach((track) => {
+          // Remove existing tracks of the same kind to avoid duplicates
+          const existingTracks = newRemoteStream
+            .getTracks()
+            .filter((t) => t.kind === track.kind);
+          existingTracks.forEach((existingTrack) => {
+            newRemoteStream.removeTrack(existingTrack);
+          });
+
+          newRemoteStream.addTrack(track);
+        });
+      }
+
       setState((prev) => ({
         ...prev,
         remoteStatus: "Terhubung",
@@ -50,82 +62,10 @@ export const useWebRTC = () => {
     };
   }, []);
 
-  const setupAudioStream = async (
-    localAudio: HTMLMediaElement | null,
-    remoteAudio: HTMLAudioElement | null
+  const createCall = async (
+    callInput: HTMLInputElement | null,
+    localStreamToSend: MediaStream | null = null
   ) => {
-    if (!state.pc) return;
-
-    let stream: MediaStream | null = null;
-
-    // Capture the audio stream from the local audio element (HTMLMediaElement)
-    if (localAudio) {
-      stream = (
-        localAudio as HTMLMediaElement & { captureStream?: () => MediaStream }
-      ).captureStream
-        ? (
-            localAudio as HTMLMediaElement & {
-              captureStream: () => MediaStream;
-            }
-          ).captureStream()
-        : (
-            localAudio as HTMLMediaElement & {
-              mozCaptureStream: () => MediaStream;
-            }
-          ).mozCaptureStream();
-    }
-
-    if (stream) {
-      const audioContext = new AudioContext();
-
-      // Log the captured stream before processing
-      console.log("Captured stream:", stream);
-
-      // Load the noise-suppression processor worklet
-      await audioContext.audioWorklet.addModule(
-        "/worklets/noise-suppression-processor.js"
-      );
-
-      // Create a new MediaStreamAudioSourceNode from the stream
-      const source = audioContext.createMediaStreamSource(stream);
-
-      // Log the source node created
-      console.log("Created MediaStreamAudioSourceNode:", source);
-
-      // Create an AudioWorkletNode to apply noise suppression processing
-      const workletNode = new AudioWorkletNode(
-        audioContext,
-        "noise-suppression-processor"
-      );
-
-      // Connect the source node to the worklet node
-      source.connect(workletNode);
-
-      // Create a MediaStreamAudioDestinationNode to capture the output of the worklet node
-      const destination = audioContext.createMediaStreamDestination();
-
-      // Connect the worklet node to the destination node
-      workletNode.connect(destination);
-
-      // Log the worklet node's connection to the audio context
-      console.log("Connected worklet node to destination node.");
-
-      // Add the tracks from the processed stream to the RTCPeerConnection
-      destination.stream.getTracks().forEach((track) => {
-        console.log("Adding processed track to RTC connection:", track);
-        state.pc?.addTrack(track, destination.stream);
-      });
-
-      // Handle incoming tracks for remote audio
-      state.pc.ontrack = (event) => {
-        if (remoteAudio) {
-          remoteAudio.srcObject = event.streams[0];
-        }
-      };
-    }
-  };
-
-  const createCall = async (callInput: HTMLInputElement | null) => {
     if (!state.pc) return null;
 
     setState((prev) => ({
@@ -134,6 +74,15 @@ export const useWebRTC = () => {
       localStatus: "Terhubung",
       remoteStatus: "Menunggu...",
     }));
+
+    // Add local stream tracks to peer connection
+    if (localStreamToSend) {
+      const tracks = localStreamToSend.getTracks();
+
+      tracks.forEach((track) => {
+        state.pc?.addTrack(track, localStreamToSend);
+      });
+    }
 
     const callDoc = firestore.collection("calls").doc();
     const offerCandidates = callDoc.collection("offerCandidates");
@@ -184,7 +133,10 @@ export const useWebRTC = () => {
     return callDoc.id;
   };
 
-  const joinCall = async (callId: string) => {
+  const joinCall = async (
+    callId: string,
+    localStreamToSend: MediaStream | null = null
+  ) => {
     if (!state.pc || !callId) return false;
 
     setState((prev) => ({
@@ -193,6 +145,15 @@ export const useWebRTC = () => {
       localStatus: "Terhubung",
       remoteStatus: "Terhubung",
     }));
+
+    // Add local stream tracks to peer connection
+    if (localStreamToSend) {
+      const tracks = localStreamToSend.getTracks();
+
+      tracks.forEach((track) => {
+        state.pc?.addTrack(track, localStreamToSend);
+      });
+    }
 
     const callDoc = firestore.collection("calls").doc(callId);
     const answerCandidates = callDoc.collection("answerCandidates");
@@ -236,7 +197,6 @@ export const useWebRTC = () => {
 
   return {
     ...state,
-    setupAudioStream,
     createCall,
     joinCall,
   };

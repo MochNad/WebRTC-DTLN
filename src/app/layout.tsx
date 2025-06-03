@@ -47,21 +47,27 @@ export default function RootLayout({
                   <NavigationMenuList className="flex gap-4">
                     <NavigationMenuItem>
                       <Link href="/" legacyBehavior passHref>
-                        <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                        <NavigationMenuLink
+                          className={navigationMenuTriggerStyle()}
+                        >
                           Home
                         </NavigationMenuLink>
                       </Link>
                     </NavigationMenuItem>
                     <NavigationMenuItem>
                       <Link href="/dataset" legacyBehavior passHref>
-                        <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                        <NavigationMenuLink
+                          className={navigationMenuTriggerStyle()}
+                        >
                           Dataset
                         </NavigationMenuLink>
                       </Link>
                     </NavigationMenuItem>
                     <NavigationMenuItem>
                       <Link href="/eksperimen" legacyBehavior passHref>
-                        <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                        <NavigationMenuLink
+                          className={navigationMenuTriggerStyle()}
+                        >
                           Eksperimen
                         </NavigationMenuLink>
                       </Link>
