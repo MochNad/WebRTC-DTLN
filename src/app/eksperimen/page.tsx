@@ -8,6 +8,7 @@ import { UploadFileSection } from "@/components/experiment/upload-file-section";
 import { PerformanceChartsSection } from "@/components/experiment/performance-charts-section";
 import { WebRTCSection } from "@/components/experiment/webrtc-section";
 import { useRef, useEffect } from "react";
+import { toast } from "sonner";
 
 const DTLN_CONFIG = {
   workerPath: "/workers/dtln.worker.js",
@@ -117,8 +118,12 @@ export default function Experiment() {
     const validation = validateDTLNAudioStream();
 
     if (!validation.valid) {
-      alert(validation.message);
+      toast.error(validation.message);
       return null;
+    }
+
+    if (validation.warning) {
+      toast.warning(validation.warning);
     }
 
     return await createCall(callInput, processedOutputMediaStream);
@@ -128,8 +133,12 @@ export default function Experiment() {
     const validation = validateDTLNAudioStream();
 
     if (!validation.valid) {
-      alert(validation.message);
+      toast.error(validation.message);
       return false;
+    }
+
+    if (validation.warning) {
+      toast.warning(validation.warning);
     }
 
     return await joinCall(callId, processedOutputMediaStream);

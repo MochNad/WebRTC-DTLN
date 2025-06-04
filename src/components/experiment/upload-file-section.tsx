@@ -4,6 +4,7 @@ import { useRef, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 
 interface FileSpecs {
   format: string;
@@ -28,15 +29,18 @@ interface UploadFileSectionProps {
 }
 
 const formatTime = (seconds: number): string => {
-  if (!Number.isFinite(seconds) || seconds < 0) return "00:00.00";
+  if (!Number.isFinite(seconds) || seconds < 0) return "00:00:00.00";
 
-  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
   const remainingSeconds = Math.floor(seconds % 60);
-  const milliseconds = Math.floor((seconds % 1) * 100);
+  const centiseconds = Math.floor((seconds % 1) * 100);
 
-  return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
+  return `${hours.toString().padStart(2, "0")}:${minutes
     .toString()
-    .padStart(2, "0")}.${milliseconds.toString().padStart(2, "0")}`;
+    .padStart(2, "0")}:${remainingSeconds
+    .toString()
+    .padStart(2, "0")}.${centiseconds.toString().padStart(2, "0")}`;
 };
 
 const validateAudioFile = (file: File): string | null => {
@@ -106,13 +110,15 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
       const validationError = validateAudioFile(file);
       if (validationError) {
         setValidationError(validationError);
+        toast.error(validationError);
         return;
       }
 
       if (!isCallActive) {
-        setValidationError(
-          "Harap buat atau bergabung ke panggilan WebRTC terlebih dahulu"
-        );
+        const errorMessage =
+          "Harap buat atau bergabung ke panggilan WebRTC terlebih dahulu";
+        setValidationError(errorMessage);
+        toast.warning(errorMessage);
         return;
       }
 
@@ -123,12 +129,20 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
           const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
           await processAudioBuffer(file, audioBuffer);
+          toast.success("Audio berhasil diproses dan siap untuk panggilan");
         } catch (error) {
           console.error("Processing failed:", error);
           const errorMessage =
             error instanceof Error ? error.message : "Processing failed";
           setValidationError(errorMessage);
+          toast.error(`Gagal memproses audio: ${errorMessage}`);
         }
+      } else if (!isReady) {
+        toast.warning(
+          "Sistem DTLN belum siap. Tunggu hingga verifikasi sistem selesai."
+        );
+      } else if (isProcessing) {
+        toast.info("Sedang memproses audio lain. Tunggu hingga selesai.");
       }
     },
     [isReady, isProcessing, processAudioBuffer, isCallActive]

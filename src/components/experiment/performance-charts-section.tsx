@@ -26,14 +26,24 @@ export const PerformanceChartsSection: React.FC<
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [isCollectingData, setIsCollectingData] = useState(false);
   const [lastChartUpdate, setLastChartUpdate] = useState<number>(0);
+  const [startTime, setStartTime] = useState<number>(0);
 
   useEffect(() => {
     if ((isRealTimeProcessing || isProcessing) && processingStats) {
       const now = Date.now();
 
+      // Set start time when processing begins
+      if (startTime === 0) {
+        setStartTime(now);
+        setLastChartUpdate(now);
+      }
+
+      // Collect data every 1000ms (1 second) for per-second data
       if (now - lastChartUpdate >= 1000) {
+        const currentTime = new Date();
+
         const newDataPoint: ChartDataPoint = {
-          time: new Date().toLocaleTimeString(),
+          time: currentTime.toLocaleTimeString(), // Show actual time (HH:MM:SS)
           worklet: processingStats.workletProcessingMs,
           worker: processingStats.workerProcessingMs,
           model1: processingStats.model1ProcessingMs,
@@ -46,11 +56,19 @@ export const PerformanceChartsSection: React.FC<
         setLastChartUpdate(now);
       }
     }
-  }, [isRealTimeProcessing, isProcessing, processingStats, lastChartUpdate]);
+  }, [
+    isRealTimeProcessing,
+    isProcessing,
+    processingStats,
+    lastChartUpdate,
+    startTime,
+  ]);
 
   useEffect(() => {
     if ((isRealTimeProcessing || isProcessing) && !isCollectingData) {
       setIsCollectingData(true);
+      // Reset start time when processing starts
+      setStartTime(Date.now());
     } else if (!isRealTimeProcessing && !isProcessing && isCollectingData) {
       setIsCollectingData(false);
     }

@@ -42,7 +42,8 @@ export const Chart: React.FC<ChartProps> = ({
   yAxisLabel,
   formatter,
 }) => {
-  const displayData = data.slice(-100);
+  // Display all data instead of limiting to last 100 points
+  const displayData = data;
 
   return (
     <div className="w-full">
@@ -61,7 +62,7 @@ export const Chart: React.FC<ChartProps> = ({
             <XAxis
               dataKey="time"
               tick={{ fontSize: 12 }}
-              interval="preserveStartEnd"
+              interval={Math.max(0, Math.floor(displayData.length / 10))}
               axisLine={false}
               tickLine={false}
             />
