@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PhoneCall } from "lucide-react";
+import { StatusIndicator } from "./status-indicator";
 
 interface WebRTCSectionProps {
   createCall: (inputRef: HTMLInputElement | null) => Promise<string | null>;
@@ -12,35 +13,8 @@ interface WebRTCSectionProps {
   localStatus: string;
   remoteStatus: string;
   isCallActive: boolean;
+  isSystemReady: boolean;
 }
-
-const StatusIndicator = ({ status }: { status: string }) => {
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "terhubung":
-        return "bg-green-500"; // Green for connected
-      case "menunggu...":
-        return "bg-yellow-500"; // Yellow for waiting
-      case "terputus":
-        return "bg-red-500"; // Red for disconnected
-      case "tersedia":
-        return "bg-green-500"; // Green for available
-      case "memuat...":
-        return "bg-blue-500"; // Blue for loading
-      case "error":
-        return "bg-red-500"; // Red for error
-      default:
-        return "bg-gray-500"; // Gray for unknown status
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className={`w-2 h-2 rounded-full ${getStatusColor(status)}`} />
-      <span className="text-sm font-medium">{status}</span>
-    </div>
-  );
-};
 
 export function WebRTCSection({
   createCall,
@@ -48,17 +22,49 @@ export function WebRTCSection({
   localStatus,
   remoteStatus,
   isCallActive,
+  isSystemReady,
 }: WebRTCSectionProps) {
   const [callInputValue, setCallInputValue] = useState<string>("");
+  const [generatedCallId, setGeneratedCallId] = useState<string>("");
+  const [showCopyFeedback, setShowCopyFeedback] = useState<boolean>(false);
   const callInputRef = useRef<HTMLInputElement>(null);
 
   const handleWebRTC = useCallback(async () => {
     if (callInputValue.trim() === "") {
-      await createCall(callInputRef.current);
+      const callId = await createCall(callInputRef.current);
+      if (callId) {
+        setGeneratedCallId(callId);
+        setCallInputValue(callId);
+      }
     } else {
       await joinCall(callInputValue);
     }
   }, [callInputValue, createCall, joinCall]);
+
+  const handleInputClick = useCallback(async () => {
+    if (generatedCallId && callInputValue === generatedCallId) {
+      try {
+        await navigator.clipboard.writeText(generatedCallId);
+        setShowCopyFeedback(true);
+        setTimeout(() => setShowCopyFeedback(false), 2000);
+      } catch (error) {
+        console.error("Failed to copy to clipboard:", error);
+      }
+    }
+  }, [generatedCallId, callInputValue]);
+
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      // Only allow changes if it's not a generated call ID or if call is not active
+      if (
+        !(generatedCallId && callInputValue === generatedCallId) &&
+        !isCallActive
+      ) {
+        setCallInputValue(e.target.value);
+      }
+    },
+    [generatedCallId, callInputValue, isCallActive]
+  );
 
   return (
     <section className="space-y-4">
@@ -68,20 +74,39 @@ export function WebRTCSection({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-4 md:flex-row">
-            <div className="flex-1 flex-grow">
+            <div className="flex-1 flex-grow relative">
               <Input
                 placeholder="Kode"
-                className="w-full"
+                className={`w-full ${
+                  generatedCallId && callInputValue === generatedCallId
+                    ? "cursor-pointer hover:bg-gray-50"
+                    : ""
+                }`}
                 ref={callInputRef}
-                onChange={(e) => setCallInputValue(e.target.value)}
-                disabled={isCallActive}
+                value={callInputValue}
+                onChange={handleInputChange}
+                onClick={handleInputClick}
+                disabled={
+                  !isSystemReady &&
+                  !(generatedCallId && callInputValue === generatedCallId)
+                }
+                readOnly={
+                  (!!generatedCallId && callInputValue === generatedCallId) ||
+                  (isCallActive &&
+                    !(generatedCallId && callInputValue === generatedCallId))
+                }
               />
+              {showCopyFeedback && (
+                <div className="absolute top-12 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded z-10">
+                  Disalin!
+                </div>
+              )}
             </div>
             <div>
               <Button
                 variant="default"
                 onClick={handleWebRTC}
-                disabled={isCallActive}
+                disabled={isCallActive || !isSystemReady}
                 className="w-full"
               >
                 <PhoneCall />

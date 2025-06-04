@@ -4,7 +4,6 @@ import { useRef, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
 
 interface FileSpecs {
   format: string;
@@ -26,6 +25,8 @@ interface UploadFileSectionProps {
   progress: ProcessingProgress;
   processAudioRealTime: (buffer: AudioBuffer) => Promise<void>;
   isCallActive: boolean;
+  localStatus: string;
+  remoteStatus: string;
 }
 
 const formatTime = (seconds: number): string => {
@@ -63,13 +64,24 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
   isProcessing,
   progress,
   processAudioRealTime,
-  isCallActive,
+  localStatus,
+  remoteStatus,
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileSpecs, setFileSpecs] = useState<FileSpecs | null>(null);
   const [validationError, setValidationError] = useState<string>("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset file input when processing completes
+  const resetFileInput = useCallback(() => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    setSelectedFile(null);
+    setFileSpecs(null);
+    setValidationError("");
+  }, []);
 
   const processAudioBuffer = useCallback(
     async (file: File, audioBuffer: AudioBuffer) => {
@@ -98,54 +110,65 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
     [processAudioRealTime]
   );
 
+  // Check if both local and remote are connected
+  const isWebRTCConnected =
+    localStatus === "Terhubung" && remoteStatus === "Terhubung";
+
   const handleFileUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
 
+      // Reset previous state when new file is selected
       setValidationError("");
-      setSelectedFile(file);
       setFileSpecs(null);
+      setSelectedFile(null);
 
       const validationError = validateAudioFile(file);
       if (validationError) {
         setValidationError(validationError);
-        toast.error(validationError);
+        // Reset file input on validation error
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        setTimeout(() => setValidationError(""), 3000);
         return;
       }
 
-      if (!isCallActive) {
-        const errorMessage =
-          "Harap buat atau bergabung ke panggilan WebRTC terlebih dahulu";
-        setValidationError(errorMessage);
-        toast.warning(errorMessage);
-        return;
-      }
+      // Set selected file after validation passes
+      setSelectedFile(file);
 
-      if (isReady && !isProcessing) {
+      if (isWebRTCConnected && isReady && !isProcessing) {
         try {
           const arrayBuffer = await file.arrayBuffer();
           const audioContext = new AudioContext({ sampleRate: 16000 });
           const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
           await processAudioBuffer(file, audioBuffer);
-          toast.success("Audio berhasil diproses dan siap untuk panggilan");
+
+          // Don't close audio context immediately, let it be handled by cleanup
+          audioContext.close().catch(() => {
+            // Ignore close errors
+          });
         } catch (error) {
           console.error("Processing failed:", error);
           const errorMessage =
             error instanceof Error ? error.message : "Processing failed";
           setValidationError(errorMessage);
-          toast.error(`Gagal memproses audio: ${errorMessage}`);
+
+          // Reset file input on processing error
+          resetFileInput();
+          setTimeout(() => setValidationError(""), 3000);
         }
-      } else if (!isReady) {
-        toast.warning(
-          "Sistem DTLN belum siap. Tunggu hingga verifikasi sistem selesai."
-        );
-      } else if (isProcessing) {
-        toast.info("Sedang memproses audio lain. Tunggu hingga selesai.");
       }
     },
-    [isReady, isProcessing, processAudioBuffer, isCallActive]
+    [
+      isReady,
+      isProcessing,
+      processAudioBuffer,
+      isWebRTCConnected,
+      resetFileInput,
+    ]
   );
 
   return (
@@ -156,29 +179,22 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <Input
-              ref={fileInputRef}
-              type="file"
-              accept=".wav,audio/wav"
-              onChange={handleFileUpload}
-              className="w-full"
-              disabled={!isReady || isProcessing || !isCallActive}
-            />
+            <div className="relative">
+              <Input
+                ref={fileInputRef}
+                type="file"
+                accept=".wav,audio/wav"
+                onChange={handleFileUpload}
+                className="w-full"
+                disabled={!isReady || isProcessing || !isWebRTCConnected}
+              />
 
-            {!isCallActive && (
-              <div className="flex items-center p-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg">
-                <span className="mr-2">⚠️</span>
-                Harap buat atau bergabung ke panggilan WebRTC pada langkah 2
-                terlebih dahulu sebelum memproses audio.
-              </div>
-            )}
-
-            {validationError && (
-              <div className="flex items-center p-3 text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg">
-                <span className="mr-2">❌</span>
-                {validationError}
-              </div>
-            )}
+              {validationError && (
+                <div className="absolute top-12 left-1/2 transform -translate-x-1/2 bg-red-600 text-white text-xs px-2 py-1 rounded z-10">
+                  {validationError}
+                </div>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

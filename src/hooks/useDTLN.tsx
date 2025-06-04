@@ -26,6 +26,12 @@ interface ProcessingStats {
   bufferDropped: number;
 }
 
+interface SpectogramData {
+  rawAudio: Float32Array;
+  processedAudio: Float32Array;
+  timestamp: number;
+}
+
 interface ProcessingProgress {
   percentage: number;
   processedTime: number;
@@ -52,6 +58,9 @@ export function useDTLN(config: DTLNConfig) {
     remainingTime: 0,
   });
   const [isRealTimeProcessing, setIsRealTimeProcessing] = useState(false);
+  const [spectogramData, setSpectogramData] = useState<SpectogramData | null>(
+    null
+  );
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
@@ -185,6 +194,13 @@ export function useDTLN(config: DTLNConfig) {
           case "dtlnStatus":
             setWorkerStatus(data.initialized ? "Tersedia" : "Error");
             break;
+          case "spectogramData":
+            setSpectogramData({
+              rawAudio: new Float32Array(data.rawAudio),
+              processedAudio: new Float32Array(data.processedAudio),
+              timestamp: data.timestamp,
+            });
+            break;
         }
       };
 
@@ -241,11 +257,58 @@ export function useDTLN(config: DTLNConfig) {
     updateProgress();
   }, []);
 
-  // Handle processing completion
-  const handleProcessingComplete = useCallback(() => {
+  // Enhanced cleanup function
+  const resetProcessingState = useCallback(() => {
     progressTrackingRef.current = false;
     setIsRealTimeProcessing(false);
     setIsProcessing(false);
+
+    // Reset progress
+    setProgress({
+      percentage: 0,
+      processedTime: 0,
+      totalTime: 0,
+      remainingTime: 0,
+    });
+
+    // Clear spectogram data
+    setSpectogramData(null);
+
+    // Stop any existing audio processing
+    if (audioSourceRef.current) {
+      try {
+        audioSourceRef.current.stop();
+        audioSourceRef.current.disconnect();
+        audioSourceRef.current = null;
+      } catch (error) {
+        console.warn("Error stopping audio source:", error);
+      }
+    }
+
+    // Reset processing stats - this will trigger chart reset
+    setProcessingStats({
+      workletProcessingMs: 0,
+      workerProcessingMs: 0,
+      model1ProcessingMs: 0,
+      model2ProcessingMs: 0,
+      bufferQueue: 0,
+      bufferDropped: 0,
+    });
+
+    // Send reset messages
+    if (workerRef.current) {
+      workerRef.current.postMessage({ type: "resetMetrics" });
+    }
+
+    if (workletNodeRef.current) {
+      workletNodeRef.current.port.postMessage({ type: "resetMetrics" });
+    }
+  }, []);
+
+  // Handle processing completion with delay for spectogram replay
+  const handleProcessingComplete = useCallback(() => {
+    progressTrackingRef.current = false;
+    setIsRealTimeProcessing(false);
 
     // Send end of stream to worker
     if (workerRef.current) {
@@ -264,6 +327,11 @@ export function useDTLN(config: DTLNConfig) {
       processedTime: prev.totalTime,
       remainingTime: 0,
     }));
+
+    // Delay setting isProcessing to false to allow spectogram to complete replay
+    setTimeout(() => {
+      setIsProcessing(false);
+    }, 100); // Small delay to ensure spectogram component processes the completion
   }, []);
 
   // Real-time audio processing
@@ -282,6 +350,9 @@ export function useDTLN(config: DTLNConfig) {
       }
 
       try {
+        // Reset state before starting new processing
+        resetProcessingState();
+
         setIsRealTimeProcessing(true);
         setIsProcessing(true);
         progressTrackingRef.current = true;
@@ -341,9 +412,7 @@ export function useDTLN(config: DTLNConfig) {
         // Start progress tracking
         startProgressTracking(buffer.duration);
       } catch (error) {
-        setIsRealTimeProcessing(false);
-        setIsProcessing(false);
-        progressTrackingRef.current = false;
+        resetProcessingState();
         throw error;
       }
     },
@@ -352,42 +421,9 @@ export function useDTLN(config: DTLNConfig) {
       workerStatus,
       handleProcessingComplete,
       startProgressTracking,
+      resetProcessingState,
     ]
   );
-
-  // Stop processing
-  const stopProcessing = useCallback(() => {
-    progressTrackingRef.current = false;
-    setIsRealTimeProcessing(false);
-    setIsProcessing(false);
-
-    if (audioSourceRef.current) {
-      try {
-        audioSourceRef.current.stop();
-        audioSourceRef.current.disconnect();
-        audioSourceRef.current = null;
-      } catch (error) {
-        console.warn("Error stopping audio source:", error);
-      }
-    }
-
-    // Reset progress
-    setProgress({
-      percentage: 0,
-      processedTime: 0,
-      totalTime: 0,
-      remainingTime: 0,
-    });
-
-    // Send reset messages
-    if (workerRef.current) {
-      workerRef.current.postMessage({ type: "resetMetrics" });
-    }
-
-    if (workletNodeRef.current) {
-      workletNodeRef.current.port.postMessage({ type: "resetMetrics" });
-    }
-  }, []);
 
   // Enhanced file processing with validation
   const processAudioFile = useCallback(
@@ -524,6 +560,11 @@ export function useDTLN(config: DTLNConfig) {
     }
   }, []);
 
+  // Stop processing
+  const stopProcessing = useCallback(() => {
+    resetProcessingState();
+  }, [resetProcessingState]);
+
   // Initialize on mount
   useEffect(() => {
     const initialize = async () => {
@@ -564,10 +605,12 @@ export function useDTLN(config: DTLNConfig) {
     processAudioFile,
     processAudioRealTime,
     stopProcessing,
+    resetProcessingState,
     playProcessedAudio,
     stopAudio,
     isReady: workletStatus === "Tersedia" && workerStatus === "Tersedia",
     processedOutputMediaStream:
       mediaStreamDestinationNodeRef.current?.stream || null,
+    spectogramData,
   };
 }

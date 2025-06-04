@@ -246,6 +246,9 @@ class DTLNProcessor {
     this.isInitialized = false;
     this.model1ProcessingTime = 0;
     this.model2ProcessingTime = 0;
+    // Add spectogram data collection
+    this.collectSpectogramData = false;
+    this.spectogramCallback = null;
   }
 
   async initialize() {
@@ -293,8 +296,22 @@ class DTLNProcessor {
     this.shiftInputBuffer();
     this.addToInputBuffer(inputData, blockSize);
 
+    // Store raw input for spectogram if collection is enabled
+    const rawInputBlock = this.collectSpectogramData
+      ? new Float32Array(this.audioProcessor.inputBuffer)
+      : null;
+
     const processedBlock = await this.processAudioBlock();
     this.updateOutputBuffer(processedBlock);
+
+    // Send spectogram data if collection is enabled
+    if (
+      this.collectSpectogramData &&
+      rawInputBlock &&
+      this.spectogramCallback
+    ) {
+      this.spectogramCallback(rawInputBlock, processedBlock);
+    }
 
     return this.extractOutput(blockSize, inputData.length);
   }
@@ -350,6 +367,16 @@ class DTLNProcessor {
 
     return output;
   }
+
+  enableSpectogramCollection(callback) {
+    this.collectSpectogramData = true;
+    this.spectogramCallback = callback;
+  }
+
+  disableSpectogramCollection() {
+    this.collectSpectogramData = false;
+    this.spectogramCallback = null;
+  }
 }
 
 class WorkerController {
@@ -378,6 +405,12 @@ class WorkerController {
 
   async initialize() {
     const success = await this.processor.initialize();
+
+    // Enable spectogram data collection
+    this.processor.enableSpectogramCollection((rawData, processedData) => {
+      this.sendSpectogramData(rawData, processedData);
+    });
+
     this.sendStatusMessage(success);
     return success;
   }
@@ -507,6 +540,12 @@ class WorkerController {
         while (!buffer.isEmpty()) buffer.deq();
       }
     );
+
+    // Reset spectogram collection
+    this.processor.disableSpectogramCollection();
+    this.processor.enableSpectogramCollection((rawData, processedData) => {
+      this.sendSpectogramData(rawData, processedData);
+    });
   }
 
   sendFallbackAudio(originalData) {
@@ -532,6 +571,22 @@ class WorkerController {
       initialized: initialized,
       sampleRate: DTLNConfig.TARGET_SAMPLE_RATE,
     });
+  }
+
+  sendSpectogramData(rawData, processedData) {
+    // Send spectogram data at very high frequency for smooth, gap-free visualization
+    if (Math.random() < 0.8) {
+      // Send ~80% of frames for spectogram (increased from 50%)
+      self.postMessage(
+        {
+          type: "spectogramData",
+          rawAudio: rawData,
+          processedAudio: processedData,
+          timestamp: performance.now(),
+        },
+        [rawData.buffer, processedData.buffer]
+      );
+    }
   }
 }
 

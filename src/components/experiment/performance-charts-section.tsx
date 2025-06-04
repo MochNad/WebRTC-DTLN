@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MetricCard } from "./metric-card";
 import { Chart, ChartDataPoint } from "./chart";
+
+const CHART_DISPLAY_LIMIT = 30; // Show only last 30 data points for clarity
 
 interface ProcessingStats {
   workletProcessingMs: number;
@@ -24,9 +25,26 @@ export const PerformanceChartsSection: React.FC<
   PerformanceChartsSectionProps
 > = ({ isRealTimeProcessing, isProcessing, processingStats }) => {
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
+  const [displayData, setDisplayData] = useState<ChartDataPoint[]>([]);
   const [isCollectingData, setIsCollectingData] = useState(false);
   const [lastChartUpdate, setLastChartUpdate] = useState<number>(0);
   const [startTime, setStartTime] = useState<number>(0);
+
+  // Reset chart data when processing starts
+  useEffect(() => {
+    if ((isRealTimeProcessing || isProcessing) && !isCollectingData) {
+      // Clear previous chart data when starting new processing
+      setChartData([]);
+      setDisplayData([]);
+      setIsCollectingData(true);
+      setStartTime(Date.now());
+      setLastChartUpdate(Date.now());
+    } else if (!isRealTimeProcessing && !isProcessing && isCollectingData) {
+      setIsCollectingData(false);
+      // Automatically show full data when processing ends
+      setDisplayData(chartData);
+    }
+  }, [isRealTimeProcessing, isProcessing, isCollectingData, chartData]);
 
   useEffect(() => {
     if ((isRealTimeProcessing || isProcessing) && processingStats) {
@@ -52,7 +70,22 @@ export const PerformanceChartsSection: React.FC<
           bufferDropped: processingStats.bufferDropped,
         };
 
-        setChartData((prev) => [...prev, newDataPoint]);
+        // Always add to full dataset
+        setChartData((prev) => {
+          const newFullData = [...prev, newDataPoint];
+
+          // During processing, show limited data; after processing, show full data
+          if (isRealTimeProcessing || isProcessing) {
+            // Keep only the last N points for display during processing
+            setDisplayData(newFullData.slice(-CHART_DISPLAY_LIMIT));
+          } else {
+            // Show all data after processing
+            setDisplayData(newFullData);
+          }
+
+          return newFullData;
+        });
+
         setLastChartUpdate(now);
       }
     }
@@ -63,30 +96,6 @@ export const PerformanceChartsSection: React.FC<
     lastChartUpdate,
     startTime,
   ]);
-
-  useEffect(() => {
-    if ((isRealTimeProcessing || isProcessing) && !isCollectingData) {
-      setIsCollectingData(true);
-      // Reset start time when processing starts
-      setStartTime(Date.now());
-    } else if (!isRealTimeProcessing && !isProcessing && isCollectingData) {
-      setIsCollectingData(false);
-    }
-  }, [isRealTimeProcessing, isProcessing, isCollectingData]);
-
-  const latestChartData =
-    chartData.length > 0 ? chartData[chartData.length - 1] : null;
-
-  const currentMetrics = latestChartData
-    ? {
-        workletProcessingMs: latestChartData.worklet,
-        workerProcessingMs: latestChartData.worker,
-        model1ProcessingMs: latestChartData.model1,
-        model2ProcessingMs: latestChartData.model2,
-        bufferQueue: latestChartData.bufferQueue,
-        bufferDropped: latestChartData.bufferDropped,
-      }
-    : processingStats;
 
   const bufferChartLines = [
     { dataKey: "bufferQueue", name: "Buffer Queue", color: "#10b981" },
@@ -118,20 +127,9 @@ export const PerformanceChartsSection: React.FC<
         <CardHeader>
           <CardTitle>Manajemen Buffer</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <MetricCard
-              label="Buffer Queue"
-              value={currentMetrics.bufferQueue}
-            />
-            <MetricCard
-              label="Buffer Dropped"
-              value={currentMetrics.bufferDropped}
-            />
-          </div>
-
+        <CardContent>
           <Chart
-            data={chartData}
+            data={displayData}
             title=""
             lines={bufferChartLines}
             yAxisLabel="Count"
@@ -144,23 +142,12 @@ export const PerformanceChartsSection: React.FC<
         <CardHeader>
           <CardTitle>Performa Worklet dan Worker</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <MetricCard
-              label="Worklet"
-              value={`${currentMetrics.workletProcessingMs.toFixed(3)}ms`}
-            />
-            <MetricCard
-              label="Worker"
-              value={`${currentMetrics.workerProcessingMs.toFixed(3)}ms`}
-            />
-          </div>
-
+        <CardContent>
           <Chart
-            data={chartData}
+            data={displayData}
             title=""
             lines={workletWorkerChartLines}
-            yAxisLabel="Time (ms)"
+            yAxisLabel="Waktu (ms)"
             formatter={timeFormatter}
           />
         </CardContent>
@@ -170,23 +157,12 @@ export const PerformanceChartsSection: React.FC<
         <CardHeader>
           <CardTitle>Performa Model DTLN</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <MetricCard
-              label="Model 1"
-              value={`${currentMetrics.model1ProcessingMs.toFixed(3)}ms`}
-            />
-            <MetricCard
-              label="Model 2"
-              value={`${currentMetrics.model2ProcessingMs.toFixed(3)}ms`}
-            />
-          </div>
-
+        <CardContent>
           <Chart
-            data={chartData}
+            data={displayData}
             title=""
             lines={modelChartLines}
-            yAxisLabel="Time (ms)"
+            yAxisLabel="Waktu (ms)"
             formatter={modelFormatter}
           />
         </CardContent>

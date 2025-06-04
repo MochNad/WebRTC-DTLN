@@ -7,8 +7,8 @@ import { SystemVerificationSection } from "@/components/experiment/system-verifi
 import { UploadFileSection } from "@/components/experiment/upload-file-section";
 import { PerformanceChartsSection } from "@/components/experiment/performance-charts-section";
 import { WebRTCSection } from "@/components/experiment/webrtc-section";
+import { SpectogramSection } from "@/components/experiment/spectogram-section";
 import { useRef, useEffect } from "react";
-import { toast } from "sonner";
 
 const DTLN_CONFIG = {
   workerPath: "/workers/dtln.worker.js",
@@ -38,9 +38,19 @@ export default function Experiment() {
     processAudioRealTime,
     isReady,
     processedOutputMediaStream,
+    spectogramData,
   } = useDTLN(DTLN_CONFIG);
 
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
+
+  // Check if system is ready for WebRTC calls - be more flexible with status checking
+  const isSystemReady =
+    (workletStatus === "loaded" ||
+      workletStatus === "Ready" ||
+      workletStatus === "Tersedia") &&
+    (workerStatus === "loaded" ||
+      workerStatus === "Ready" ||
+      workerStatus === "Tersedia");
 
   // Setup remote audio element
   useEffect(() => {
@@ -115,30 +125,30 @@ export default function Experiment() {
   const handleCreateCallWithDTLNAudio = async (
     callInput: HTMLInputElement | null
   ) => {
-    const validation = validateDTLNAudioStream();
-
-    if (!validation.valid) {
-      toast.error(validation.message);
+    // Check system readiness first
+    if (!isSystemReady) {
       return null;
     }
 
-    if (validation.warning) {
-      toast.warning(validation.warning);
+    const validation = validateDTLNAudioStream();
+
+    if (!validation.valid) {
+      return null;
     }
 
     return await createCall(callInput, processedOutputMediaStream);
   };
 
   const handleJoinCallWithDTLNAudio = async (callId: string) => {
-    const validation = validateDTLNAudioStream();
-
-    if (!validation.valid) {
-      toast.error(validation.message);
+    // Check system readiness first
+    if (!isSystemReady) {
       return false;
     }
 
-    if (validation.warning) {
-      toast.warning(validation.warning);
+    const validation = validateDTLNAudioStream();
+
+    if (!validation.valid) {
+      return false;
     }
 
     return await joinCall(callId, processedOutputMediaStream);
@@ -219,6 +229,7 @@ export default function Experiment() {
                 localStatus={localStatus}
                 remoteStatus={remoteStatus}
                 isCallActive={isCallActive}
+                isSystemReady={isSystemReady}
               />
             </div>
           </div>
@@ -255,6 +266,41 @@ export default function Experiment() {
                 progress={progress}
                 processAudioRealTime={processAudioRealTime}
                 isCallActive={isCallActive}
+                localStatus={localStatus}
+                remoteStatus={remoteStatus}
+              />
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center">
+            <div className="flex-1 border-t border-border"></div>
+            <div className="px-4 text-sm text-muted-foreground">
+              Langkah Selanjutnya
+            </div>
+            <div className="flex-1 border-t border-border"></div>
+          </div>
+
+          {/* Step 4: Spectogram Visualization */}
+          <div className="bg-card rounded-lg shadow-sm p-8 border">
+            <div className="flex items-start gap-6 mb-8">
+              <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
+                4
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-3xl font-bold tracking-tight">
+                  Visualisasi Spektogram
+                </h2>
+                <p className="text-muted-foreground text-lg leading-relaxed">
+                  Lihat perbedaan spektrum frekuensi audio sebelum dan sesudah
+                  pemrosesan DTLN secara real-time.
+                </p>
+              </div>
+            </div>
+            <div className="pl-18">
+              <SpectogramSection
+                spectogramData={spectogramData}
+                isProcessing={isRealTimeProcessing}
               />
             </div>
           </div>
@@ -268,11 +314,11 @@ export default function Experiment() {
             <div className="flex-1 border-t border-border"></div>
           </div>
 
-          {/* Step 4: Performance Monitoring */}
+          {/* Step 5: Performance Monitoring */}
           <div className="bg-card rounded-lg shadow-sm p-8 border">
             <div className="flex items-start gap-6 mb-8">
               <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
-                4
+                5
               </div>
               <div className="space-y-2">
                 <h2 className="text-3xl font-bold tracking-tight">

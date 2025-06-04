@@ -10,10 +10,13 @@ const getStatusDotColor = (status: string): string => {
     Tersedia: "bg-green-500",
     Ready: "bg-green-500",
     Completed: "bg-green-500",
+    "Terhubung": "bg-green-500",
     "Memuat...": "bg-yellow-500",
     Initializing: "bg-yellow-500",
     Processing: "bg-yellow-500",
+    "Menunggu...": "bg-yellow-500",
     Error: "bg-red-500",
+    Terputus: "bg-red-500",
   };
   return statusMap[status] || "bg-gray-400";
 };
