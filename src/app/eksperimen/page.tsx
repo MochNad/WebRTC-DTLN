@@ -8,6 +8,12 @@ import { UploadFileSection } from "@/components/experiment/upload-file-section";
 import { PerformanceChartsSection } from "@/components/experiment/performance-charts-section";
 import { WebRTCSection } from "@/components/experiment/webrtc-section";
 import { SpectogramSection } from "@/components/experiment/spectogram-section";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { useRef, useEffect } from "react";
 
 const DTLN_CONFIG = {
@@ -172,57 +178,53 @@ export default function Experiment() {
         />
 
         {/* Experiment Steps */}
-        <div className="space-y-8">
+        <Accordion type="multiple" className="w-full">
           {/* Step 1: System Verification */}
-          <div className="bg-card rounded-lg shadow-sm p-8 border">
-            <div className="flex items-start gap-6 mb-8">
-              <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
-                1
+          <AccordionItem value="system-verification" className="border-b-0">
+            <AccordionTrigger className="px-8 py-6 hover:no-underline">
+              <div className="flex items-start gap-6 w-full">
+                <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
+                  1
+                </div>
+                <div className="text-left">
+                  <h2 className="text-2xl font-bold tracking-tight">
+                    Verifikasi Sistem
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Pastikan DTLN worker dan audio worklet telah dimuat dengan
+                    benar sebelum memulai eksperimen.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <h2 className="text-3xl font-bold tracking-tight">
-                  Verifikasi Sistem
-                </h2>
-                <p className="text-muted-foreground text-lg leading-relaxed">
-                  Pastikan DTLN worker dan audio worklet telah dimuat dengan
-                  benar sebelum memulai eksperimen.
-                </p>
-              </div>
-            </div>
-            <div className="pl-18">
+            </AccordionTrigger>
+            <AccordionContent className="px-8 pb-8">
               <SystemVerificationSection
                 workletStatus={workletStatus}
                 workerStatus={workerStatus}
               />
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div className="flex items-center">
-            <div className="flex-1 border-t border-border"></div>
-            <div className="px-4 text-sm text-muted-foreground">
-              Langkah Selanjutnya
-            </div>
-            <div className="flex-1 border-t border-border"></div>
-          </div>
+            </AccordionContent>
+          </AccordionItem>
 
           {/* Step 2: WebRTC Communication */}
-          <div className="bg-card rounded-lg shadow-sm p-8 border">
-            <div className="flex items-start gap-6 mb-8">
-              <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
-                2
+          <AccordionItem value="webrtc-communication" className="border-b-0">
+            <AccordionTrigger className="px-8 py-6 hover:no-underline">
+              <div className="flex items-start gap-6 w-full">
+                <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
+                  2
+                </div>
+                <div className="text-left">
+                  <h2 className="text-2xl font-bold tracking-tight">
+                    Komunikasi WebRTC
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Buat atau bergabung ke panggilan video menggunakan audio
+                    yang telah diproses DTLN untuk kualitas suara yang lebih
+                    jernih.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <h2 className="text-3xl font-bold tracking-tight">
-                  Komunikasi WebRTC
-                </h2>
-                <p className="text-muted-foreground text-lg leading-relaxed">
-                  Buat atau bergabung ke panggilan video menggunakan audio yang
-                  telah diproses DTLN untuk kualitas suara yang lebih jernih.
-                </p>
-              </div>
-            </div>
-            <div className="pl-18">
+            </AccordionTrigger>
+            <AccordionContent className="px-8 pb-8">
               <WebRTCSection
                 createCall={handleCreateCallWithDTLNAudio}
                 joinCall={handleJoinCallWithDTLNAudio}
@@ -231,35 +233,28 @@ export default function Experiment() {
                 isCallActive={isCallActive}
                 isSystemReady={isSystemReady}
               />
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div className="flex items-center">
-            <div className="flex-1 border-t border-border"></div>
-            <div className="px-4 text-sm text-muted-foreground">
-              Langkah Selanjutnya
-            </div>
-            <div className="flex-1 border-t border-border"></div>
-          </div>
+            </AccordionContent>
+          </AccordionItem>
 
           {/* Step 3: Audio Processing Setup */}
-          <div className="bg-card rounded-lg shadow-sm p-8 border">
-            <div className="flex items-start gap-6 mb-8">
-              <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
-                3
+          <AccordionItem value="audio-processing" className="border-b-0">
+            <AccordionTrigger className="px-8 py-6 hover:no-underline">
+              <div className="flex items-start gap-6 w-full">
+                <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
+                  3
+                </div>
+                <div className="text-left">
+                  <h2 className="text-2xl font-bold tracking-tight">
+                    Setup Audio Processing
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Aktifkan pemrosesan audio real-time dengan DTLN untuk
+                    mengurangi noise pada input suara Anda.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <h2 className="text-3xl font-bold tracking-tight">
-                  Setup Audio Processing
-                </h2>
-                <p className="text-muted-foreground text-lg leading-relaxed">
-                  Aktifkan pemrosesan audio real-time dengan DTLN untuk
-                  mengurangi noise pada input suara Anda.
-                </p>
-              </div>
-            </div>
-            <div className="pl-18">
+            </AccordionTrigger>
+            <AccordionContent className="px-8 pb-8">
               <UploadFileSection
                 isReady={isReady}
                 isProcessing={isProcessing}
@@ -269,76 +264,65 @@ export default function Experiment() {
                 localStatus={localStatus}
                 remoteStatus={remoteStatus}
               />
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div className="flex items-center">
-            <div className="flex-1 border-t border-border"></div>
-            <div className="px-4 text-sm text-muted-foreground">
-              Langkah Selanjutnya
-            </div>
-            <div className="flex-1 border-t border-border"></div>
-          </div>
+            </AccordionContent>
+          </AccordionItem>
 
           {/* Step 4: Spectogram Visualization */}
-          <div className="bg-card rounded-lg shadow-sm p-8 border">
-            <div className="flex items-start gap-6 mb-8">
-              <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
-                4
+          <AccordionItem
+            value="spectogram-visualization"
+            className="border-b-0"
+          >
+            <AccordionTrigger className="px-8 py-6 hover:no-underline">
+              <div className="flex items-start gap-6 w-full">
+                <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
+                  4
+                </div>
+                <div className="text-left">
+                  <h2 className="text-2xl font-bold tracking-tight">
+                    Visualisasi Spektogram
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Lihat perbedaan spektrum frekuensi audio sebelum dan sesudah
+                    pemrosesan DTLN secara real-time.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <h2 className="text-3xl font-bold tracking-tight">
-                  Visualisasi Spektogram
-                </h2>
-                <p className="text-muted-foreground text-lg leading-relaxed">
-                  Lihat perbedaan spektrum frekuensi audio sebelum dan sesudah
-                  pemrosesan DTLN secara real-time.
-                </p>
-              </div>
-            </div>
-            <div className="pl-18">
+            </AccordionTrigger>
+            <AccordionContent className="px-8 pb-8">
               <SpectogramSection
                 spectogramData={spectogramData}
                 isProcessing={isRealTimeProcessing}
               />
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div className="flex items-center">
-            <div className="flex-1 border-t border-border"></div>
-            <div className="px-4 text-sm text-muted-foreground">
-              Langkah Terakhir
-            </div>
-            <div className="flex-1 border-t border-border"></div>
-          </div>
+            </AccordionContent>
+          </AccordionItem>
 
           {/* Step 5: Performance Monitoring */}
-          <div className="bg-card rounded-lg shadow-sm p-8 border">
-            <div className="flex items-start gap-6 mb-8">
-              <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
-                5
+          <AccordionItem value="performance-monitoring" className="border-b-0">
+            <AccordionTrigger className="px-8 py-6 hover:no-underline">
+              <div className="flex items-start gap-6 w-full">
+                <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
+                  5
+                </div>
+                <div className="text-left">
+                  <h2 className="text-2xl font-bold tracking-tight">
+                    Monitoring Performa
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Pantau performa sistem secara real-time untuk memastikan
+                    pemrosesan audio berjalan optimal.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <h2 className="text-3xl font-bold tracking-tight">
-                  Monitoring Performa
-                </h2>
-                <p className="text-muted-foreground text-lg leading-relaxed">
-                  Pantau performa sistem secara real-time untuk memastikan
-                  pemrosesan audio berjalan optimal.
-                </p>
-              </div>
-            </div>
-            <div className="pl-18">
+            </AccordionTrigger>
+            <AccordionContent className="px-8 pb-8">
               <PerformanceChartsSection
                 isRealTimeProcessing={isRealTimeProcessing}
                 isProcessing={isProcessing}
                 processingStats={processingStats}
               />
-            </div>
-          </div>
-        </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
     </div>
   );
