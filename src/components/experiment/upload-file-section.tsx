@@ -190,7 +190,7 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
               />
 
               {validationError && (
-                <div className="absolute top-12 left-1/2 transform -translate-x-1/2 bg-red-600 text-white text-xs px-2 py-1 rounded z-10">
+                <div className="absolute top-12 left-1/2 transform -translate-x-1/2 bg-red-600 dark:bg-red-700 text-white text-xs px-2 py-1 rounded z-10">
                   {validationError}
                 </div>
               )}

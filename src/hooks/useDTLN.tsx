@@ -2,10 +2,73 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 
+// Define RingBuffer interface
+interface RingBufferInterface<T = unknown> {
+  capacity(): number;
+  isEmpty(): boolean;
+  isFull(): boolean;
+  size(): number;
+  enq(element: T): number;
+  deq(): T;
+  peek(): T;
+}
+
 // Add WebKit AudioContext type declaration
 declare global {
   interface Window {
     webkitAudioContext: typeof AudioContext;
+    RingBuffer: new <T>(
+      capacity: number,
+      evictedCb?: (evicted: T) => void
+    ) => RingBufferInterface<T>;
+  }
+
+  // Add proper globalThis typing for RingBuffer using interface
+  interface GlobalThis {
+    RingBufferConstructor: new <T>(
+      capacity: number,
+      evictedCb?: (evicted: T) => void
+    ) => RingBufferInterface<T>;
+    RingBuffer: new <T>(
+      capacity: number,
+      evictedCb?: (evicted: T) => void
+    ) => RingBufferInterface<T>;
+  }
+}
+
+// Add AudioConfig class for consistent buffer management
+class AudioConfig {
+  static get SAMPLE_RATE() {
+    return 16000;
+  }
+  static get BUFFER_SIZE() {
+    return 128;
+  }
+  static get LATENCY_HINT(): AudioContextLatencyCategory {
+    return "interactive";
+  }
+
+  // Mobile-adaptive configuration
+  static get isMobile() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+  }
+
+  static get RING_BUFFER_CAPACITY() {
+    return this.isMobile ? 20 : 50; // Reduced for mobile
+  }
+  static get WORKLET_BUFFER_CAPACITY() {
+    return this.isMobile ? 10 : 20; // Reduced for mobile
+  }
+  static get INPUT_BUFFER_CAPACITY() {
+    return this.isMobile ? 20 : 50; // Reduced for mobile
+  }
+  static get OUTPUT_BUFFER_CAPACITY() {
+    return this.isMobile ? 20 : 50; // Reduced for mobile
+  }
+  static get PROCESSING_QUEUE_CAPACITY() {
+    return this.isMobile ? 15 : 30; // Reduced for mobile
   }
 }
 
@@ -74,6 +137,29 @@ export function useDTLN(config: DTLNConfig) {
   const processingStartTimeRef = useRef<number>(0);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
+  // Initialize RingBuffer loading
+  const loadRingBuffer = useCallback(async () => {
+    if (typeof window.RingBuffer !== "undefined") {
+      return true;
+    }
+
+    return new Promise<boolean>((resolve) => {
+      const script = document.createElement("script");
+      script.src = "/libraries/ringbufferjs-2.0.0/package/index.umd.js";
+      script.onload = () => {
+        if (window.RingBuffer) {
+          (globalThis as unknown as GlobalThis).RingBufferConstructor =
+            window.RingBuffer;
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      };
+      script.onerror = () => resolve(false);
+      document.head.appendChild(script);
+    });
+  }, []);
+
   // Initialize Audio Context and Worklet
   const initializeWorklet = useCallback(async () => {
     try {
@@ -81,21 +167,47 @@ export function useDTLN(config: DTLNConfig) {
         throw new Error("Web Audio API tidak didukung");
       }
 
-      // Create audio context
-      audioContextRef.current = new (window.AudioContext ||
-        window.webkitAudioContext)({
+      // Load RingBuffer first
+      await loadRingBuffer();
+
+      // Create audio context with mobile-optimized settings
+      const contextOptions: AudioContextOptions = {
         sampleRate: config.sampleRate,
-      });
+        latencyHint: AudioConfig.LATENCY_HINT,
+      };
+
+      // Add mobile-specific optimizations
+      if (AudioConfig.isMobile) {
+        contextOptions.latencyHint = "playback"; // Less aggressive latency for mobile
+      }
+
+      audioContextRef.current = new (window.AudioContext ||
+        window.webkitAudioContext)(contextOptions);
 
       // Add worklet processor
       await audioContextRef.current.audioWorklet.addModule(
         config.processorPath
       );
 
-      // Create worklet node
+      // Create worklet node with mobile-adaptive configuration
       workletNodeRef.current = new AudioWorkletNode(
         audioContextRef.current,
-        "dtln-audio-processor"
+        "dtln-audio-processor",
+        {
+          outputChannelCount: [1],
+          numberOfInputs: 1,
+          numberOfOutputs: 1,
+          channelCount: 1,
+          channelCountMode: "explicit",
+          channelInterpretation: "discrete",
+          processorOptions: {
+            bufferCapacity: AudioConfig.WORKLET_BUFFER_CAPACITY,
+            sampleRate: audioContextRef.current.sampleRate,
+            bufferSize: AudioConfig.BUFFER_SIZE,
+            isMobile: AudioConfig.isMobile,
+            performanceMode: AudioConfig.isMobile ? "efficiency" : "quality",
+          },
+        }
       );
 
       // Create MediaStreamDestinationNode for capturing processed audio
@@ -103,7 +215,6 @@ export function useDTLN(config: DTLNConfig) {
         audioContextRef.current.createMediaStreamDestination();
 
       // Connect worklet only to media stream destination (for WebRTC capture)
-      // Remove local playback to keep processed audio silent on sender side
       workletNodeRef.current.connect(mediaStreamDestinationNodeRef.current);
 
       // Set up worklet message handling
@@ -115,12 +226,10 @@ export function useDTLN(config: DTLNConfig) {
             // Update all stats in one atomic operation - preserve raw values
             setProcessingStats((prev) => ({
               ...prev,
-              // Raw values from worklet - no transformation
               workletProcessingMs:
                 data.workletProcessingMs ?? prev.workletProcessingMs,
               bufferQueue: data.bufferQueue ?? prev.bufferQueue,
               bufferDropped: data.bufferDropped ?? prev.bufferDropped,
-              // Raw values from worker - no transformation
               workerProcessingMs:
                 data.workerProcessingMs ?? prev.workerProcessingMs,
               model1ProcessingMs:
@@ -148,7 +257,7 @@ export function useDTLN(config: DTLNConfig) {
       setWorkletStatus("Error");
       return false;
     }
-  }, [config.processorPath, config.sampleRate]);
+  }, [config.processorPath, config.sampleRate, loadRingBuffer]);
 
   // Initialize Worker
   const initializeWorker = useCallback(async () => {
@@ -169,14 +278,12 @@ export function useDTLN(config: DTLNConfig) {
             if (data.debug) {
               setProcessingStats((prev) => ({
                 ...prev,
-                // Raw worker values - no transformation
                 workerProcessingMs:
                   data.debug.workerProcessingMs ?? prev.workerProcessingMs,
                 model1ProcessingMs:
                   data.debug.model1ProcessingMs ?? prev.model1ProcessingMs,
                 model2ProcessingMs:
                   data.debug.model2ProcessingMs ?? prev.model2ProcessingMs,
-                // Keep existing worklet values
                 workletProcessingMs: prev.workletProcessingMs,
                 bufferQueue: prev.bufferQueue,
                 bufferDropped: prev.bufferDropped,
@@ -209,12 +316,23 @@ export function useDTLN(config: DTLNConfig) {
         setWorkerStatus("Error");
       };
 
-      // Initialize worker
+      // Initialize worker with mobile-adaptive configuration
       workerRef.current.postMessage({
         type: "init",
         model1Path: config.model1Path,
         model2Path: config.model2Path,
         sampleRate: config.sampleRate,
+        bufferConfig: {
+          inputCapacity: AudioConfig.INPUT_BUFFER_CAPACITY,
+          outputCapacity: AudioConfig.OUTPUT_BUFFER_CAPACITY,
+          processingCapacity: AudioConfig.PROCESSING_QUEUE_CAPACITY,
+        },
+        performanceConfig: {
+          isMobile: AudioConfig.isMobile,
+          processingMode: AudioConfig.isMobile ? "lightweight" : "full",
+          frameSkipping: AudioConfig.isMobile ? 2 : 1, // Skip every 2nd frame on mobile
+          spectogramRate: AudioConfig.isMobile ? 0.3 : 0.8, // Reduce spectogram frequency
+        },
       });
     } catch (error: unknown) {
       console.error("Failed to initialize worker:", error);
@@ -439,18 +557,6 @@ export function useDTLN(config: DTLNConfig) {
         duration: number;
       };
     }> => {
-      // Validate file type
-      const allowedExtensions = ["wav"];
-      const fileExtension = file.name.split(".").pop()?.toLowerCase();
-
-      if (!allowedExtensions.includes(fileExtension || "")) {
-        throw new Error("Hanya file WAV yang diperbolehkan");
-      }
-
-      if (!file.type.includes("wav") && !file.type.includes("audio/wav")) {
-        throw new Error("Format file harus WAV");
-      }
-
       if (
         !audioContextRef.current ||
         !workletNodeRef.current ||

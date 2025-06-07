@@ -68,12 +68,14 @@ export const useWebRTC = () => {
   ) => {
     if (!state.pc) return null;
 
-    setState((prev) => ({
-      ...prev,
-      isCallActive: true,
-      localStatus: "Terhubung",
-      remoteStatus: "Menunggu...",
-    }));
+    // Create call document first to get ID immediately
+    const callDoc = firestore.collection("calls").doc();
+    const callId = callDoc.id;
+
+    // Set the call ID in input immediately
+    if (callInput) {
+      callInput.value = callId;
+    }
 
     // Add local stream tracks to peer connection
     if (localStreamToSend) {
@@ -84,13 +86,8 @@ export const useWebRTC = () => {
       });
     }
 
-    const callDoc = firestore.collection("calls").doc();
     const offerCandidates = callDoc.collection("offerCandidates");
     const answerCandidates = callDoc.collection("answerCandidates");
-
-    if (callInput) {
-      callInput.value = callDoc.id;
-    }
 
     state.pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -107,6 +104,14 @@ export const useWebRTC = () => {
     };
 
     await callDoc.set({ offer });
+
+    // Update status after call is successfully created
+    setState((prev) => ({
+      ...prev,
+      isCallActive: true,
+      localStatus: "Terhubung",
+      remoteStatus: "Menunggu...",
+    }));
 
     callDoc.onSnapshot((snapshot) => {
       const data = snapshot.data();
@@ -130,7 +135,21 @@ export const useWebRTC = () => {
       });
     });
 
-    return callDoc.id;
+    return callId;
+  };
+
+  // Add function to update call status
+  const updateCallStatus = (
+    isActive: boolean,
+    localStatus: string,
+    remoteStatus: string
+  ) => {
+    setState((prev) => ({
+      ...prev,
+      isCallActive: isActive,
+      localStatus,
+      remoteStatus,
+    }));
   };
 
   const joinCall = async (
@@ -139,65 +158,94 @@ export const useWebRTC = () => {
   ) => {
     if (!state.pc || !callId) return false;
 
-    setState((prev) => ({
-      ...prev,
-      isCallActive: true,
-      localStatus: "Terhubung",
-      remoteStatus: "Terhubung",
-    }));
-
-    // Add local stream tracks to peer connection
-    if (localStreamToSend) {
-      const tracks = localStreamToSend.getTracks();
-
-      tracks.forEach((track) => {
-        state.pc?.addTrack(track, localStreamToSend);
-      });
+    // Validate callId format and existence
+    if (!callId.trim()) {
+      return false;
     }
 
-    const callDoc = firestore.collection("calls").doc(callId);
-    const answerCandidates = callDoc.collection("answerCandidates");
-    const offerCandidates = callDoc.collection("offerCandidates");
+    try {
+      const callDoc = firestore.collection("calls").doc(callId);
+      const callSnapshot = await callDoc.get();
 
-    state.pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        answerCandidates.add(event.candidate.toJSON());
+      // Check if call document exists
+      if (!callSnapshot.exists) {
+        return false;
       }
-    };
 
-    const callData = (await callDoc.get()).data();
-    if (!callData) return false;
+      const callData = callSnapshot.data();
 
-    const offerDescription = callData.offer;
-    await state.pc.setRemoteDescription(
-      new RTCSessionDescription(offerDescription)
-    );
+      // Check if call has valid offer
+      if (!callData || !callData.offer) {
+        return false;
+      }
 
-    const answerDescription = await state.pc.createAnswer();
-    await state.pc.setLocalDescription(answerDescription);
+      // Only update status after validation passes
+      setState((prev) => ({
+        ...prev,
+        isCallActive: true,
+        localStatus: "Terhubung",
+        remoteStatus: "Terhubung",
+      }));
 
-    const answer = {
-      type: answerDescription.type,
-      sdp: answerDescription.sdp,
-    };
+      // Add local stream tracks to peer connection
+      if (localStreamToSend) {
+        const tracks = localStreamToSend.getTracks();
 
-    await callDoc.update({ answer });
+        tracks.forEach((track) => {
+          state.pc?.addTrack(track, localStreamToSend);
+        });
+      }
 
-    offerCandidates.onSnapshot((snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "added") {
-          const candidate = new RTCIceCandidate(change.doc.data());
-          state.pc?.addIceCandidate(candidate);
+      const answerCandidates = callDoc.collection("answerCandidates");
+      const offerCandidates = callDoc.collection("offerCandidates");
+
+      state.pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          answerCandidates.add(event.candidate.toJSON());
         }
-      });
-    });
+      };
 
-    return true;
+      const offerDescription = callData.offer;
+      await state.pc.setRemoteDescription(
+        new RTCSessionDescription(offerDescription)
+      );
+
+      const answerDescription = await state.pc.createAnswer();
+      await state.pc.setLocalDescription(answerDescription);
+
+      const answer = {
+        type: answerDescription.type,
+        sdp: answerDescription.sdp,
+      };
+
+      await callDoc.update({ answer });
+
+      offerCandidates.onSnapshot((snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "added") {
+            const candidate = new RTCIceCandidate(change.doc.data());
+            state.pc?.addIceCandidate(candidate);
+          }
+        });
+      });
+
+      return true;
+    } catch (error) {
+      console.error("Error joining call:", error);
+      setState((prev) => ({
+        ...prev,
+        isCallActive: false,
+        localStatus: "Terputus",
+        remoteStatus: "Terputus",
+      }));
+      return false;
+    }
   };
 
   return {
     ...state,
     createCall,
     joinCall,
+    updateCallStatus,
   };
 };

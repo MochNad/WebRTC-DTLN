@@ -8,12 +8,6 @@ import { UploadFileSection } from "@/components/experiment/upload-file-section";
 import { PerformanceChartsSection } from "@/components/experiment/performance-charts-section";
 import { WebRTCSection } from "@/components/experiment/webrtc-section";
 import { SpectogramSection } from "@/components/experiment/spectogram-section";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { useRef, useEffect } from "react";
 
 const DTLN_CONFIG = {
@@ -177,11 +171,11 @@ export default function Experiment() {
           style={{ display: "none" }}
         />
 
-        {/* Experiment Steps */}
-        <Accordion type="multiple" className="w-full">
+        {/* Experiment Steps - Always Open */}
+        <div className="w-full space-y-4">
           {/* Step 1: System Verification */}
-          <AccordionItem value="system-verification" className="border-b-0">
-            <AccordionTrigger className="px-8 py-6 hover:no-underline">
+          <div className="border rounded-lg">
+            <div className="px-8 py-6">
               <div className="flex items-start gap-6 w-full">
                 <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
                   1
@@ -196,18 +190,18 @@ export default function Experiment() {
                   </p>
                 </div>
               </div>
-            </AccordionTrigger>
-            <AccordionContent className="px-8 pb-8">
+            </div>
+            <div className="px-8 pb-8">
               <SystemVerificationSection
                 workletStatus={workletStatus}
                 workerStatus={workerStatus}
               />
-            </AccordionContent>
-          </AccordionItem>
+            </div>
+          </div>
 
           {/* Step 2: WebRTC Communication */}
-          <AccordionItem value="webrtc-communication" className="border-b-0">
-            <AccordionTrigger className="px-8 py-6 hover:no-underline">
+          <div className="border rounded-lg">
+            <div className="px-8 py-6">
               <div className="flex items-start gap-6 w-full">
                 <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
                   2
@@ -223,8 +217,8 @@ export default function Experiment() {
                   </p>
                 </div>
               </div>
-            </AccordionTrigger>
-            <AccordionContent className="px-8 pb-8">
+            </div>
+            <div className="px-8 pb-8">
               <WebRTCSection
                 createCall={handleCreateCallWithDTLNAudio}
                 joinCall={handleJoinCallWithDTLNAudio}
@@ -233,12 +227,12 @@ export default function Experiment() {
                 isCallActive={isCallActive}
                 isSystemReady={isSystemReady}
               />
-            </AccordionContent>
-          </AccordionItem>
+            </div>
+          </div>
 
           {/* Step 3: Audio Processing Setup */}
-          <AccordionItem value="audio-processing" className="border-b-0">
-            <AccordionTrigger className="px-8 py-6 hover:no-underline">
+          <div className="border rounded-lg">
+            <div className="px-8 py-6">
               <div className="flex items-start gap-6 w-full">
                 <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
                   3
@@ -253,8 +247,8 @@ export default function Experiment() {
                   </p>
                 </div>
               </div>
-            </AccordionTrigger>
-            <AccordionContent className="px-8 pb-8">
+            </div>
+            <div className="px-8 pb-8">
               <UploadFileSection
                 isReady={isReady}
                 isProcessing={isProcessing}
@@ -264,15 +258,12 @@ export default function Experiment() {
                 localStatus={localStatus}
                 remoteStatus={remoteStatus}
               />
-            </AccordionContent>
-          </AccordionItem>
+            </div>
+          </div>
 
           {/* Step 4: Spectogram Visualization */}
-          <AccordionItem
-            value="spectogram-visualization"
-            className="border-b-0"
-          >
-            <AccordionTrigger className="px-8 py-6 hover:no-underline">
+          <div className="border rounded-lg">
+            <div className="px-8 py-6">
               <div className="flex items-start gap-6 w-full">
                 <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
                   4
@@ -287,18 +278,18 @@ export default function Experiment() {
                   </p>
                 </div>
               </div>
-            </AccordionTrigger>
-            <AccordionContent className="px-8 pb-8">
+            </div>
+            <div className="px-8 pb-8">
               <SpectogramSection
                 spectogramData={spectogramData}
                 isProcessing={isRealTimeProcessing}
               />
-            </AccordionContent>
-          </AccordionItem>
+            </div>
+          </div>
 
           {/* Step 5: Performance Monitoring */}
-          <AccordionItem value="performance-monitoring" className="border-b-0">
-            <AccordionTrigger className="px-8 py-6 hover:no-underline">
+          <div className="border rounded-lg">
+            <div className="px-8 py-6">
               <div className="flex items-start gap-6 w-full">
                 <div className="flex items-center justify-center w-12 h-12 bg-primary text-primary-foreground rounded-full font-bold text-xl shrink-0">
                   5
@@ -313,16 +304,16 @@ export default function Experiment() {
                   </p>
                 </div>
               </div>
-            </AccordionTrigger>
-            <AccordionContent className="px-8 pb-8">
+            </div>
+            <div className="px-8 pb-8">
               <PerformanceChartsSection
                 isRealTimeProcessing={isRealTimeProcessing}
                 isProcessing={isProcessing}
                 processingStats={processingStats}
               />
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
