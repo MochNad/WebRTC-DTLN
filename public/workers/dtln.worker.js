@@ -1,5 +1,5 @@
 /**
- * Audio Worker - DTLN Implementation with RingBuffer
+ * Audio Worker - DTLN Implementation with Enhanced RingBuffer Management
  */
 
 importScripts(
@@ -24,7 +24,7 @@ class DTLNConfig {
   static get MODEL_2_PATH() {
     return "/models/dtln_model_2.onnx";
   }
-  // Add missing buffer capacity constants
+  // Enhanced buffer capacity constants
   static get INPUT_BUFFER_CAPACITY() {
     return 50;
   }
@@ -33,6 +33,13 @@ class DTLNConfig {
   }
   static get PROCESSING_QUEUE_CAPACITY() {
     return 30;
+  }
+  // Mobile performance optimizations
+  static get MOBILE_BLOCK_SKIP() {
+    return 2; // Process every 2nd block on mobile
+  }
+  static get MOBILE_SPECTOGRAM_RATE() {
+    return 0.3; // Reduce spectogram frequency for mobile
   }
 }
 
@@ -246,9 +253,23 @@ class DTLNProcessor {
     this.isInitialized = false;
     this.model1ProcessingTime = 0;
     this.model2ProcessingTime = 0;
-    // Add spectogram data collection
     this.collectSpectogramData = false;
     this.spectogramCallback = null;
+
+    // Performance optimization flags
+    this.isMobile = false;
+    this.frameSkipCount = 0;
+    this.frameSkipInterval = 1;
+    this.spectogramRate = 0.8;
+    this.lastProcessedBuffer = null; // Cache for frame skipping
+  }
+
+  configure(performanceConfig) {
+    if (performanceConfig) {
+      this.isMobile = performanceConfig.isMobile || false;
+      this.frameSkipInterval = performanceConfig.frameSkipping || 1;
+      this.spectogramRate = performanceConfig.spectogramRate || 0.8;
+    }
   }
 
   async initialize() {
@@ -293,6 +314,16 @@ class DTLNProcessor {
 
     const blockSize = Math.min(DTLNConfig.BLOCK_SHIFT, inputData.length);
 
+    // Frame skipping for mobile optimization
+    if (this.isMobile && this.frameSkipInterval > 1) {
+      this.frameSkipCount++;
+      if (this.frameSkipCount < this.frameSkipInterval) {
+        // Return cached processed buffer or input for skipped frames
+        return this.lastProcessedBuffer || inputData;
+      }
+      this.frameSkipCount = 0;
+    }
+
     this.shiftInputBuffer();
     this.addToInputBuffer(inputData, blockSize);
 
@@ -304,16 +335,23 @@ class DTLNProcessor {
     const processedBlock = await this.processAudioBlock();
     this.updateOutputBuffer(processedBlock);
 
-    // Send spectogram data if collection is enabled
+    // Cache the processed output for mobile frame skipping
+    const output = this.extractOutput(blockSize, inputData.length);
+    if (this.isMobile) {
+      this.lastProcessedBuffer = new Float32Array(output);
+    }
+
+    // Send spectogram data with mobile-optimized frequency
     if (
       this.collectSpectogramData &&
       rawInputBlock &&
-      this.spectogramCallback
+      this.spectogramCallback &&
+      Math.random() < this.spectogramRate
     ) {
       this.spectogramCallback(rawInputBlock, processedBlock);
     }
 
-    return this.extractOutput(blockSize, inputData.length);
+    return output;
   }
 
   shiftInputBuffer() {
@@ -384,35 +422,92 @@ class WorkerController {
     this.processor = new DTLNProcessor();
     this.isStreamEnded = false;
     this.droppedBufferCount = 0;
+    this.bufferConfig = {
+      inputCapacity: DTLNConfig.INPUT_BUFFER_CAPACITY,
+      outputCapacity: DTLNConfig.OUTPUT_BUFFER_CAPACITY,
+      processingCapacity: DTLNConfig.PROCESSING_QUEUE_CAPACITY,
+    };
+
+    // Performance tracking
+    this.performanceConfig = {};
+    this.processedFrameCount = 0;
+    this.lastPerformanceCheck = performance.now();
 
     this.initializeBuffers();
   }
 
   initializeBuffers() {
-    this.inputBuffer = new RingBuffer(DTLNConfig.INPUT_BUFFER_CAPACITY, () => {
-      this.droppedBufferCount++;
-    });
-
-    this.outputBuffer = new RingBuffer(
-      DTLNConfig.OUTPUT_BUFFER_CAPACITY,
-      () => {
+    // Enhanced ring buffer initialization with better capacity management
+    this.inputBuffer = new RingBuffer(
+      this.bufferConfig.inputCapacity,
+      (evicted) => {
         this.droppedBufferCount++;
+        console.warn("Input buffer overflow, dropped data:", evicted);
       }
     );
 
-    this.processingQueue = new RingBuffer(DTLNConfig.PROCESSING_QUEUE_CAPACITY);
+    this.outputBuffer = new RingBuffer(
+      this.bufferConfig.outputCapacity,
+      (evicted) => {
+        this.droppedBufferCount++;
+        console.warn("Output buffer overflow, dropped data:", evicted);
+      }
+    );
+
+    this.processingQueue = new RingBuffer(
+      this.bufferConfig.processingCapacity,
+      (evicted) => {
+        console.warn("Processing queue overflow, dropped data:", evicted);
+      }
+    );
   }
 
-  async initialize() {
+  async initialize(config = {}) {
+    // Update buffer configuration if provided
+    if (config.bufferConfig) {
+      this.bufferConfig = { ...this.bufferConfig, ...config.bufferConfig };
+      this.reinitializeBuffers();
+    }
+
+    // Configure performance settings
+    if (config.performanceConfig) {
+      this.performanceConfig = config.performanceConfig;
+      this.processor.configure(config.performanceConfig);
+    }
+
     const success = await this.processor.initialize();
 
-    // Enable spectogram data collection
+    // Enable spectogram data collection with mobile optimization
     this.processor.enableSpectogramCollection((rawData, processedData) => {
       this.sendSpectogramData(rawData, processedData);
     });
 
     this.sendStatusMessage(success);
     return success;
+  }
+
+  reinitializeBuffers() {
+    // Clear existing buffers
+    this.clearAllBuffers();
+
+    // Reinitialize with new capacity
+    this.initializeBuffers();
+  }
+
+  clearAllBuffers() {
+    [this.inputBuffer, this.outputBuffer, this.processingQueue].forEach(
+      (buffer) => {
+        if (buffer) {
+          while (!buffer.isEmpty()) {
+            try {
+              buffer.deq();
+            } catch {
+              break;
+            }
+          }
+        }
+      }
+    );
   }
 
   async processAudio(data) {
@@ -423,17 +518,27 @@ class WorkerController {
 
     if (this.isStreamEnded) return;
 
-    this.inputBuffer.enq({
-      channels: data.channels,
-      timestamp: performance.now(),
-      debug: data.debug,
-    });
+    // Enhanced buffer management with overflow protection
+    try {
+      this.inputBuffer.enq({
+        channels: data.channels,
+        timestamp: performance.now(),
+        debug: data.debug,
+      });
+    } catch (error) {
+      console.warn("Failed to enqueue audio data:", error);
+      this.droppedBufferCount++;
+      return;
+    }
 
     await this.processInputQueue();
   }
 
   async processInputQueue() {
-    const batchSize = Math.min(5, this.inputBuffer.size());
+    // Adaptive batch sizing based on performance
+    const batchSize = this.performanceConfig.isMobile
+      ? Math.min(2, this.inputBuffer.size())
+      : Math.min(3, this.inputBuffer.size());
 
     for (let i = 0; i < batchSize && !this.inputBuffer.isEmpty(); i++) {
       const audioData = this.inputBuffer.deq();
@@ -441,6 +546,11 @@ class WorkerController {
     }
 
     this.sendAllProcessedAudio();
+
+    // Performance monitoring for mobile
+    if (this.performanceConfig.isMobile) {
+      this.monitorPerformance();
+    }
   }
 
   async processAudioData(audioData) {
@@ -453,12 +563,24 @@ class WorkerController {
         )
       );
 
-      this.outputBuffer.enq({
-        channels: processedChannels,
-        workerProcessingTime: performance.now() - startTime,
-        timestamp: performance.now(),
-        originalDebug: audioData.debug,
-      });
+      // Enhanced output buffer management
+      try {
+        this.outputBuffer.enq({
+          channels: processedChannels,
+          workerProcessingTime: performance.now() - startTime,
+          timestamp: performance.now(),
+          originalDebug: audioData.debug,
+        });
+      } catch (error) {
+        console.warn("Output buffer overflow, sending directly:", error);
+        // Send directly if buffer is full
+        this.sendProcessedAudio({
+          channels: processedChannels,
+          workerProcessingTime: performance.now() - startTime,
+          timestamp: performance.now(),
+          originalDebug: audioData.debug,
+        });
+      }
     } catch (error) {
       console.error("Error processing audio data:", error);
       this.sendFallbackAudio(audioData);
@@ -467,13 +589,12 @@ class WorkerController {
 
   sendAllProcessedAudio() {
     while (!this.outputBuffer.isEmpty()) {
-      this.sendProcessedAudioFromBuffer();
+      const processedData = this.outputBuffer.deq();
+      this.sendProcessedAudio(processedData);
     }
   }
 
-  sendProcessedAudioFromBuffer() {
-    const processedData = this.outputBuffer.deq();
-
+  sendProcessedAudio(processedData) {
     self.postMessage(
       {
         type: "processedAudio",
@@ -481,9 +602,9 @@ class WorkerController {
         debug: {
           dtlnInitialized: this.processor.isInitialized,
           // Send raw processing times without any rounding
-          workerProcessingMs: processedData.workerProcessingTime, // Raw value
-          model1ProcessingMs: this.processor.model1ProcessingTime || 0, // Raw value
-          model2ProcessingMs: this.processor.model2ProcessingTime || 0, // Raw value
+          workerProcessingMs: processedData.workerProcessingTime,
+          model1ProcessingMs: this.processor.model1ProcessingTime || 0,
+          model2ProcessingMs: this.processor.model2ProcessingTime || 0,
           inputBufferSize: this.inputBuffer.size(),
           outputBufferSize: this.outputBuffer.size(),
           droppedBuffers: this.droppedBufferCount,
@@ -495,28 +616,98 @@ class WorkerController {
     );
   }
 
+  monitorPerformance() {
+    this.processedFrameCount++;
+    const now = performance.now();
+
+    // Check performance every 100 frames
+    if (this.processedFrameCount % 100 === 0) {
+      const elapsed = now - this.lastPerformanceCheck;
+      const fps = 100000 / elapsed; // frames per second
+
+      // Adjust processing if performance is poor
+      if (fps < 20 && this.processor.frameSkipInterval < 4) {
+        this.processor.frameSkipInterval++;
+        console.warn(
+          `Mobile performance low (${fps.toFixed(
+            1
+          )} fps), increasing frame skip to ${this.processor.frameSkipInterval}`
+        );
+      } else if (fps > 40 && this.processor.frameSkipInterval > 1) {
+        this.processor.frameSkipInterval--;
+        console.log(
+          `Mobile performance good (${fps.toFixed(
+            1
+          )} fps), reducing frame skip to ${this.processor.frameSkipInterval}`
+        );
+      }
+
+      this.lastPerformanceCheck = now;
+    }
+  }
+
+  sendSpectogramData(rawData, processedData) {
+    // Mobile-optimized spectogram sending
+    const sendRate = this.performanceConfig.isMobile
+      ? this.performanceConfig.spectogramRate || 0.3
+      : 0.8;
+
+    if (Math.random() < sendRate) {
+      self.postMessage(
+        {
+          type: "spectogramData",
+          rawAudio: rawData,
+          processedAudio: processedData,
+          timestamp: performance.now(),
+        },
+        [rawData.buffer, processedData.buffer]
+      );
+    }
+  }
+
   getBufferHealth() {
-    return {
+    const health = {
       inputUtilization: Math.round(
         (this.inputBuffer.size() / this.inputBuffer.capacity()) * 100
       ),
       outputUtilization: Math.round(
         (this.outputBuffer.size() / this.outputBuffer.capacity()) * 100
       ),
+      processingUtilization: Math.round(
+        (this.processingQueue.size() / this.processingQueue.capacity()) * 100
+      ),
       totalDropped: this.droppedBufferCount,
       status: this.droppedBufferCount > 10 ? "warning" : "good",
+      capacities: {
+        input: this.inputBuffer.capacity(),
+        output: this.outputBuffer.capacity(),
+        processing: this.processingQueue.capacity(),
+      },
     };
+
+    // Add mobile-specific health metrics
+    if (this.performanceConfig.isMobile) {
+      health.mobile = {
+        frameSkipInterval: this.processor.frameSkipInterval,
+        spectogramRate: this.processor.spectogramRate,
+        processedFrames: this.processedFrameCount,
+      };
+    }
+
+    return health;
   }
 
   async handleEndOfStream() {
     if (this.isStreamEnded) return;
     this.isStreamEnded = true;
 
+    // Process remaining input buffer
     while (!this.inputBuffer.isEmpty()) {
       const audioData = this.inputBuffer.deq();
       await this.processAudioData(audioData);
     }
 
+    // Send all remaining processed audio
     this.sendAllProcessedAudio();
 
     self.postMessage({
@@ -535,11 +726,8 @@ class WorkerController {
     this.isStreamEnded = false;
     this.droppedBufferCount = 0;
 
-    [this.inputBuffer, this.outputBuffer, this.processingQueue].forEach(
-      (buffer) => {
-        while (!buffer.isEmpty()) buffer.deq();
-      }
-    );
+    // Clear all buffers safely
+    this.clearAllBuffers();
 
     // Reset spectogram collection
     this.processor.disableSpectogramCollection();
@@ -571,22 +759,6 @@ class WorkerController {
       initialized: initialized,
       sampleRate: DTLNConfig.TARGET_SAMPLE_RATE,
     });
-  }
-
-  sendSpectogramData(rawData, processedData) {
-    // Send spectogram data at very high frequency for smooth, gap-free visualization
-    if (Math.random() < 0.8) {
-      // Send ~80% of frames for spectogram (increased from 50%)
-      self.postMessage(
-        {
-          type: "spectogramData",
-          rawAudio: rawData,
-          processedAudio: processedData,
-          timestamp: performance.now(),
-        },
-        [rawData.buffer, processedData.buffer]
-      );
-    }
   }
 }
 

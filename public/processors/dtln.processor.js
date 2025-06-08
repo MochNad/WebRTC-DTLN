@@ -1,5 +1,5 @@
 /**
- * Audio Worklet Processor with RingBuffer management
+ * Audio Worklet Processor with Enhanced RingBuffer Management
  */
 
 class DTLNAudioProcessor extends AudioWorkletProcessor {
@@ -10,11 +10,23 @@ class DTLNAudioProcessor extends AudioWorkletProcessor {
     this.initializeMetrics();
     this.setupMessageHandling();
     this.sendInitializationMessage();
+
+    // Flag to track if we've attempted ring buffer upgrade
+    this.upgradeAttempted = false;
+
+    // Mobile optimization settings
+    this.isMobile = options?.processorOptions?.isMobile || false;
+    this.performanceMode =
+      options?.processorOptions?.performanceMode || "quality";
+    this.processFrameCount = 0;
+    this.frameSkipInterval = this.isMobile ? 2 : 1;
   }
 
   initializeRingBuffer() {
     if (typeof globalThis.RingBufferConstructor !== "undefined") {
       this.RingBuffer = globalThis.RingBufferConstructor;
+    } else if (typeof globalThis.RingBuffer !== "undefined") {
+      this.RingBuffer = globalThis.RingBuffer;
     } else {
       this.RingBuffer = this.createFallbackRingBuffer();
     }
@@ -53,14 +65,64 @@ class DTLNAudioProcessor extends AudioWorkletProcessor {
   }
 
   initializeBuffers(options) {
-    const capacity = options?.processorOptions?.bufferCapacity || 20;
+    // Mobile-adaptive buffer capacity
+    const baseCapacity = options?.processorOptions?.bufferCapacity || 20;
+    const capacity = this.isMobile ? Math.min(baseCapacity, 15) : baseCapacity;
 
-    this.audioBuffer = new this.RingBuffer(capacity, () => {
+    this.audioBuffer = new this.RingBuffer(capacity, (evicted) => {
       this.metrics.bufferDropped++;
+      if (!this.isMobile) {
+        // Reduce console spam on mobile
+        console.warn("Audio buffer overflow, dropped:", evicted);
+      }
     });
 
     this.isProcessingComplete = false;
     this.inputEnded = false;
+    this.ringBufferUpgraded = false;
+  }
+
+  scheduleRingBufferUpgrade() {
+    // Remove setTimeout - will upgrade during first process call instead
+    this.upgradeAttempted = false;
+  }
+
+  upgradeToNativeRingBuffer() {
+    if (this.ringBufferUpgraded) return;
+
+    if (typeof globalThis.RingBufferConstructor !== "undefined") {
+      const NativeRingBuffer = globalThis.RingBufferConstructor;
+      const oldBuffer = this.audioBuffer;
+
+      // Create new native ring buffer
+      this.audioBuffer = new NativeRingBuffer(
+        oldBuffer.capacity(),
+        (evicted) => {
+          this.metrics.bufferDropped++;
+          console.warn("Audio buffer upgrade overflow, dropped:", evicted);
+        }
+      );
+
+      // Transfer existing data
+      const existingData = [];
+      while (!oldBuffer.isEmpty()) {
+        try {
+          existingData.push(oldBuffer.deq());
+        } catch {
+          break;
+        }
+      }
+
+      // Re-enqueue data to new buffer
+      existingData.forEach((data) => {
+        if (!this.audioBuffer.isFull()) {
+          this.audioBuffer.enq(data);
+        }
+      });
+
+      this.ringBufferUpgraded = true;
+      console.log("Ring buffer upgraded to native implementation");
+    }
   }
 
   initializeMetrics() {
@@ -88,6 +150,7 @@ class DTLNAudioProcessor extends AudioWorkletProcessor {
     this.port.postMessage({
       type: "init",
       sampleRate: sampleRate,
+      bufferCapacity: this.audioBuffer.capacity(),
     });
   }
 
@@ -111,13 +174,17 @@ class DTLNAudioProcessor extends AudioWorkletProcessor {
     }
 
     if (this.isValidChannelData(data.channels)) {
-      this.audioBuffer.enq({
-        channels: data.channels,
-        timestamp: currentTime,
-      });
-
-      this.updateWorkerMetrics(data.debug);
-      this.metrics.bufferQueue = this.audioBuffer.size();
+      try {
+        this.audioBuffer.enq({
+          channels: data.channels,
+          timestamp: currentTime,
+        });
+        this.updateWorkerMetrics(data.debug);
+        this.metrics.bufferQueue = this.audioBuffer.size();
+      } catch (error) {
+        console.warn("Failed to enqueue processed audio:", error);
+        this.metrics.bufferDropped++;
+      }
     }
   }
 
@@ -164,11 +231,19 @@ class DTLNAudioProcessor extends AudioWorkletProcessor {
       model2ProcessingMs: 0,
     });
 
-    while (!this.audioBuffer.isEmpty()) {
-      this.audioBuffer.deq();
-    }
-
+    // Clear buffer safely
+    this.clearAudioBuffer();
     this.sendStatistics();
+  }
+
+  clearAudioBuffer() {
+    while (!this.audioBuffer.isEmpty()) {
+      try {
+        this.audioBuffer.deq();
+      } catch {
+        break;
+      }
+    }
   }
 
   finalizeProcessing() {
@@ -179,6 +254,22 @@ class DTLNAudioProcessor extends AudioWorkletProcessor {
 
   process(inputs, outputs) {
     const frameStartTime = this.getHighResTime();
+
+    // Attempt ring buffer upgrade on first process call
+    if (!this.upgradeAttempted) {
+      this.upgradeToNativeRingBuffer();
+      this.upgradeAttempted = true;
+    }
+
+    // Mobile frame skipping optimization
+    if (this.isMobile) {
+      this.processFrameCount++;
+      if (this.processFrameCount % this.frameSkipInterval !== 0) {
+        // For skipped frames, just pass through or use silence
+        this.usePassthroughAudio(inputs[0], outputs[0]);
+        return true;
+      }
+    }
 
     if (this.isProcessingComplete) {
       this.outputSilence(outputs);
@@ -198,16 +289,38 @@ class DTLNAudioProcessor extends AudioWorkletProcessor {
 
     const processingTime = this.getHighResTime() - frameStartTime;
 
-    this.metrics.processingTimes.push(processingTime);
-    if (this.metrics.processingTimes.length > 100) {
-      this.metrics.processingTimes.shift();
+    // Simplified processing time tracking for mobile
+    if (this.isMobile) {
+      this.metrics.workletProcessingMs = processingTime;
+      // Only track max processing time to reduce overhead
+      this.metrics.maxProcessingTime = Math.max(
+        this.metrics.maxProcessingTime,
+        processingTime
+      );
+    } else {
+      // Full processing time tracking for desktop
+      this.metrics.processingTimes.push(processingTime);
+      if (this.metrics.processingTimes.length > 200) {
+        this.metrics.processingTimes.shift();
+      }
+      this.metrics.workletProcessingMs = processingTime;
+      this.metrics.maxProcessingTime = Math.max(
+        this.metrics.maxProcessingTime,
+        processingTime
+      );
     }
 
-    this.metrics.workletProcessingMs = processingTime;
-    this.metrics.maxProcessingTime = Math.max(
-      this.metrics.maxProcessingTime,
-      processingTime
-    );
+    // Adaptive performance monitoring
+    if (this.isMobile && processingTime > 10) {
+      // 10ms threshold for mobile
+      this.frameSkipInterval = Math.min(this.frameSkipInterval + 1, 4);
+    } else if (
+      this.isMobile &&
+      processingTime < 5 &&
+      this.frameSkipInterval > 1
+    ) {
+      this.frameSkipInterval = Math.max(this.frameSkipInterval - 1, 1);
+    }
 
     this.maybeLogStatistics();
 
@@ -252,6 +365,13 @@ class DTLNAudioProcessor extends AudioWorkletProcessor {
           timestamp: currentTime,
           hasAudio: audioDetection.hasAudio,
           audioLevel: audioDetection.audioLevel,
+          bufferHealth: {
+            size: this.audioBuffer.size(),
+            capacity: this.audioBuffer.capacity(),
+            utilization: Math.round(
+              (this.audioBuffer.size() / this.audioBuffer.capacity()) * 100
+            ),
+          },
         },
       },
       channels.map((ch) => ch.buffer)
@@ -269,18 +389,23 @@ class DTLNAudioProcessor extends AudioWorkletProcessor {
   }
 
   useProcessedAudio(output) {
-    const processedData = this.audioBuffer.deq();
-    this.metrics.bufferQueue = this.audioBuffer.size();
+    try {
+      const processedData = this.audioBuffer.deq();
+      this.metrics.bufferQueue = this.audioBuffer.size();
 
-    for (let i = 0; i < output.length; i++) {
-      const sourceChannel = processedData.channels[i];
-      const targetChannel = output[i];
+      for (let i = 0; i < output.length; i++) {
+        const sourceChannel = processedData.channels[i];
+        const targetChannel = output[i];
 
-      if (sourceChannel && targetChannel) {
-        this.copyChannelData(sourceChannel, targetChannel);
-      } else {
-        targetChannel?.fill(0);
+        if (sourceChannel && targetChannel) {
+          this.copyChannelData(sourceChannel, targetChannel);
+        } else {
+          targetChannel?.fill(0);
+        }
       }
+    } catch (error) {
+      console.warn("Failed to dequeue processed audio:", error);
+      this.outputSilence(output);
     }
   }
 
@@ -313,7 +438,8 @@ class DTLNAudioProcessor extends AudioWorkletProcessor {
   }
 
   maybeLogStatistics() {
-    const interval = 1.0;
+    // Reduce statistics frequency for mobile
+    const interval = this.isMobile ? 2.0 : 1.0; // 2 seconds for mobile, 1 for desktop
     if (currentTime - this.metrics.lastLogTime >= interval) {
       this.sendStatistics();
       this.metrics.lastLogTime = currentTime;
@@ -321,15 +447,18 @@ class DTLNAudioProcessor extends AudioWorkletProcessor {
   }
 
   sendStatistics() {
-    const avgProcessingTime =
-      this.metrics.processingTimes.length > 0
-        ? this.metrics.processingTimes.reduce((a, b) => a + b, 0) /
-          this.metrics.processingTimes.length
-        : 0;
+    // Mobile-optimized statistics calculation
+    let avgProcessingTime = this.metrics.workletProcessingMs;
 
-    this.port.postMessage({
+    if (!this.isMobile && this.metrics.processingTimes.length > 0) {
+      avgProcessingTime =
+        this.metrics.processingTimes.reduce((a, b) => a + b, 0) /
+        this.metrics.processingTimes.length;
+    }
+
+    const stats = {
       type: "stats",
-      bufferQueue: this.metrics.bufferQueue,
+      bufferQueue: this.audioBuffer.size(),
       bufferDropped: this.metrics.bufferDropped,
       workletProcessingMs: avgProcessingTime,
       workerProcessingMs: this.metrics.workerProcessingMs,
@@ -337,7 +466,25 @@ class DTLNAudioProcessor extends AudioWorkletProcessor {
       model2ProcessingMs: this.metrics.model2ProcessingMs,
       maxWorkletProcessingMs: this.metrics.maxProcessingTime,
       timestamp: currentTime,
-    });
+      bufferHealth: {
+        capacity: this.audioBuffer.capacity(),
+        utilization: Math.round(
+          (this.audioBuffer.size() / this.audioBuffer.capacity()) * 100
+        ),
+        upgraded: this.ringBufferUpgraded,
+      },
+    };
+
+    // Add mobile-specific metrics
+    if (this.isMobile) {
+      stats.mobileMetrics = {
+        frameSkipInterval: this.frameSkipInterval,
+        performanceMode: this.performanceMode,
+        processedFrames: this.processFrameCount,
+      };
+    }
+
+    this.port.postMessage(stats);
   }
 }
 

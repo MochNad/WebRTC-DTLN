@@ -27,6 +27,7 @@ export function WebRTCSection({
   const [callInputValue, setCallInputValue] = useState<string>("");
   const [generatedCallId, setGeneratedCallId] = useState<string>("");
   const [showCopyFeedback, setShowCopyFeedback] = useState<boolean>(false);
+  const [validationError, setValidationError] = useState<string>("");
   const callInputRef = useRef<HTMLInputElement>(null);
 
   const handleWebRTC = useCallback(async () => {
@@ -35,9 +36,15 @@ export function WebRTCSection({
       if (callId) {
         setGeneratedCallId(callId);
         setCallInputValue(callId);
+        // Status is updated in createCall hook after successful creation
       }
     } else {
-      await joinCall(callInputValue);
+      setValidationError(""); // Clear any previous errors
+      const success = await joinCall(callInputValue);
+      if (!success) {
+        setValidationError("Kode tidak ditemukan");
+        setTimeout(() => setValidationError(""), 3000);
+      }
     }
   }, [callInputValue, createCall, joinCall]);
 
@@ -79,7 +86,7 @@ export function WebRTCSection({
                 placeholder="Kode"
                 className={`w-full ${
                   generatedCallId && callInputValue === generatedCallId
-                    ? "cursor-pointer hover:bg-gray-50"
+                    ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
                     : ""
                 }`}
                 ref={callInputRef}
@@ -97,8 +104,13 @@ export function WebRTCSection({
                 }
               />
               {showCopyFeedback && (
-                <div className="absolute top-12 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-2 py-1 rounded z-10">
+                <div className="absolute top-12 left-1/2 transform -translate-x-1/2 bg-black dark:bg-white text-white dark:text-black text-xs px-2 py-1 rounded z-10">
                   Disalin!
+                </div>
+              )}
+              {validationError && (
+                <div className="absolute top-12 left-1/2 transform -translate-x-1/2 bg-red-600 dark:bg-red-700 text-white text-xs px-2 py-1 rounded z-10">
+                  {validationError}
                 </div>
               )}
             </div>
