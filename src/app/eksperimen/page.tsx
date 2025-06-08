@@ -39,6 +39,8 @@ export default function Experiment() {
     isReady,
     processedOutputMediaStream,
     spectogramData,
+    processedAudioBuffer,
+    exportWAV,
   } = useDTLN(DTLN_CONFIG);
 
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
@@ -257,6 +259,8 @@ export default function Experiment() {
                 isCallActive={isCallActive}
                 localStatus={localStatus}
                 remoteStatus={remoteStatus}
+                processedAudioBuffer={processedAudioBuffer}
+                onExportWAV={exportWAV}
               />
             </div>
           </div>

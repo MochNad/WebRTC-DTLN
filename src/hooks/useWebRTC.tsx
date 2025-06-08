@@ -138,20 +138,6 @@ export const useWebRTC = () => {
     return callId;
   };
 
-  // Add function to update call status
-  const updateCallStatus = (
-    isActive: boolean,
-    localStatus: string,
-    remoteStatus: string
-  ) => {
-    setState((prev) => ({
-      ...prev,
-      isCallActive: isActive,
-      localStatus,
-      remoteStatus,
-    }));
-  };
-
   const joinCall = async (
     callId: string,
     localStreamToSend: MediaStream | null = null
@@ -246,6 +232,5 @@ export const useWebRTC = () => {
     ...state,
     createCall,
     joinCall,
-    updateCallStatus,
   };
 };

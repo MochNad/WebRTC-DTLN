@@ -14,11 +14,6 @@ interface WebRTCSectionProps {
   remoteStatus: string;
   isCallActive: boolean;
   isSystemReady: boolean;
-  updateCallStatus: (
-    isActive: boolean,
-    localStatus: string,
-    remoteStatus: string
-  ) => void;
 }
 
 export function WebRTCSection({

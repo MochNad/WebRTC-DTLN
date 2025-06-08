@@ -124,6 +124,8 @@ export function useDTLN(config: DTLNConfig) {
   const [spectogramData, setSpectogramData] = useState<SpectogramData | null>(
     null
   );
+  const [processedAudioBuffer, setProcessedAudioBuffer] =
+    useState<AudioBuffer | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
@@ -132,10 +134,61 @@ export function useDTLN(config: DTLNConfig) {
   const gainNodeRef = useRef<GainNode | null>(null);
   const mediaStreamDestinationNodeRef =
     useRef<MediaStreamAudioDestinationNode | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingDurationRef = useRef<number>(0);
 
   const progressTrackingRef = useRef<boolean>(false);
   const processingStartTimeRef = useRef<number>(0);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+
+  // WAV encoding utility functions
+  const encodeWAV = useCallback((audioBuffer: AudioBuffer): Blob => {
+    const length = audioBuffer.length;
+    const sampleRate = audioBuffer.sampleRate;
+    const channels = 1; // Force mono output
+    const bytesPerSample = 2; // 16-bit
+    const blockAlign = channels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+    const dataSize = length * blockAlign;
+    const bufferSize = 44 + dataSize;
+
+    const arrayBuffer = new ArrayBuffer(bufferSize);
+    const view = new DataView(arrayBuffer);
+
+    // WAV header
+    const writeString = (offset: number, string: string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+
+    writeString(0, "RIFF");
+    view.setUint32(4, bufferSize - 8, true);
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
+    view.setUint32(16, 16, true); // fmt chunk size
+    view.setUint16(20, 1, true); // PCM format
+    view.setUint16(22, channels, true); // mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, 16, true); // bits per sample
+    writeString(36, "data");
+    view.setUint32(40, dataSize, true);
+
+    // Convert float samples to 16-bit PCM - mono only
+    let offset = 44;
+    const channelData = audioBuffer.getChannelData(0); // Only use first channel for mono
+    for (let i = 0; i < length; i++) {
+      const sample = Math.max(-1, Math.min(1, channelData[i]));
+      const pcmSample = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+      view.setInt16(offset, pcmSample, true);
+      offset += 2;
+    }
+
+    return new Blob([arrayBuffer], { type: "audio/wav" });
+  }, []);
 
   // Initialize RingBuffer loading
   const loadRingBuffer = useCallback(async () => {
@@ -375,6 +428,93 @@ export function useDTLN(config: DTLNConfig) {
     updateProgress();
   }, []);
 
+  // Start recording processed audio
+  const startRecording = useCallback(
+    async (duration: number) => {
+      if (!mediaStreamDestinationNodeRef.current) return;
+
+      try {
+        recordedChunksRef.current = [];
+        recordingDurationRef.current = duration;
+
+        // Create MediaRecorder from the processed audio stream
+        mediaRecorderRef.current = new MediaRecorder(
+          mediaStreamDestinationNodeRef.current.stream,
+          {
+            mimeType: "audio/webm;codecs=opus",
+          }
+        );
+
+        mediaRecorderRef.current.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            recordedChunksRef.current.push(event.data);
+          }
+        };
+
+        mediaRecorderRef.current.onstop = async () => {
+          try {
+            const recordedBlob = new Blob(recordedChunksRef.current, {
+              type: "audio/webm;codecs=opus",
+            });
+
+            // Convert recorded blob to AudioBuffer
+            const arrayBuffer = await recordedBlob.arrayBuffer();
+            const tempAudioContext = new AudioContext({
+              sampleRate: config.sampleRate,
+            });
+            const decodedBuffer = await tempAudioContext.decodeAudioData(
+              arrayBuffer
+            );
+
+            setProcessedAudioBuffer(decodedBuffer);
+            tempAudioContext.close();
+          } catch (error) {
+            console.warn("Error processing recorded audio:", error);
+          }
+        };
+
+        mediaRecorderRef.current.start(100); // Record in 100ms chunks
+      } catch (error) {
+        console.error("Error starting recording:", error);
+      }
+    },
+    [config.sampleRate]
+  );
+
+  // Stop recording
+  const stopRecording = useCallback(() => {
+    if (
+      mediaRecorderRef.current &&
+      mediaRecorderRef.current.state === "recording"
+    ) {
+      mediaRecorderRef.current.stop();
+    }
+  }, []);
+
+  // Export processed audio as WAV
+  const exportWAV = useCallback(() => {
+    if (!processedAudioBuffer) {
+      console.warn("No processed audio buffer available for export");
+      return;
+    }
+
+    try {
+      const wavBlob = encodeWAV(processedAudioBuffer);
+      const url = URL.createObjectURL(wavBlob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `processed_audio_${Date.now()}.wav`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error exporting WAV:", error);
+    }
+  }, [processedAudioBuffer, encodeWAV]);
+
   // Enhanced cleanup function
   const resetProcessingState = useCallback(() => {
     progressTrackingRef.current = false;
@@ -421,12 +561,19 @@ export function useDTLN(config: DTLNConfig) {
     if (workletNodeRef.current) {
       workletNodeRef.current.port.postMessage({ type: "resetMetrics" });
     }
-  }, []);
+
+    // Stop recording if active
+    stopRecording();
+    setProcessedAudioBuffer(null);
+  }, [stopRecording]);
 
   // Handle processing completion with delay for spectogram replay
   const handleProcessingComplete = useCallback(() => {
     progressTrackingRef.current = false;
     setIsRealTimeProcessing(false);
+
+    // Stop recording
+    stopRecording();
 
     // Send end of stream to worker
     if (workerRef.current) {
@@ -450,7 +597,7 @@ export function useDTLN(config: DTLNConfig) {
     setTimeout(() => {
       setIsProcessing(false);
     }, 100); // Small delay to ensure spectogram component processes the completion
-  }, []);
+  }, [stopRecording]);
 
   // Real-time audio processing
   const processAudioRealTime = useCallback(
@@ -475,6 +622,9 @@ export function useDTLN(config: DTLNConfig) {
         setIsProcessing(true);
         progressTrackingRef.current = true;
         processingStartTimeRef.current = audioContextRef.current.currentTime;
+
+        // Start recording the processed audio
+        await startRecording(buffer.duration);
 
         // Reset progress
         setProgress({
@@ -540,6 +690,7 @@ export function useDTLN(config: DTLNConfig) {
       handleProcessingComplete,
       startProgressTracking,
       resetProcessingState,
+      startRecording,
     ]
   );
 
@@ -718,5 +869,7 @@ export function useDTLN(config: DTLNConfig) {
     processedOutputMediaStream:
       mediaStreamDestinationNodeRef.current?.stream || null,
     spectogramData,
+    processedAudioBuffer,
+    exportWAV,
   };
 }

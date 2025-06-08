@@ -4,6 +4,7 @@ import { useRef, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
+import { Button } from "../ui/button";
 
 interface FileSpecs {
   format: string;
@@ -27,6 +28,8 @@ interface UploadFileSectionProps {
   isCallActive: boolean;
   localStatus: string;
   remoteStatus: string;
+  processedAudioBuffer: AudioBuffer | null;
+  onExportWAV: () => void;
 }
 
 const formatTime = (seconds: number): string => {
@@ -66,6 +69,8 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
   processAudioRealTime,
   localStatus,
   remoteStatus,
+  processedAudioBuffer,
+  onExportWAV,
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileSpecs, setFileSpecs] = useState<FileSpecs | null>(null);
@@ -243,6 +248,15 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
                 </p>
               </div>
             </div>
+
+            <Button
+              variant={"outline"}
+              className="mt-2 w-full"
+              disabled={!processedAudioBuffer || isProcessing}
+              onClick={onExportWAV}
+            >
+              Export (WAV)
+            </Button>
           </div>
         </CardContent>
       </Card>

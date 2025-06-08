@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Chart, ChartDataPoint } from "./chart";
+import { Button } from "../ui/button";
 
 const CHART_DISPLAY_LIMIT = 30; // Show only last 30 data points for clarity
 
@@ -29,6 +30,50 @@ export const PerformanceChartsSection: React.FC<
   const [isCollectingData, setIsCollectingData] = useState(false);
   const [lastChartUpdate, setLastChartUpdate] = useState<number>(0);
   const [startTime, setStartTime] = useState<number>(0);
+  const [canExport, setCanExport] = useState(false);
+
+  // Add export function
+  const exportChartData = useCallback(() => {
+    if (chartData.length === 0) return;
+
+    // Create CSV header
+    const csvHeaders = [
+      "time",
+      "worklet_ms",
+      "worker_ms",
+      "model1_ms",
+      "model2_ms",
+      "buffer_queue",
+      "buffer_dropped",
+    ];
+
+    // Create CSV rows
+    const csvRows = chartData.map((dataPoint) => [
+      dataPoint.time,
+      dataPoint.worklet.toFixed(3),
+      dataPoint.worker.toFixed(3),
+      dataPoint.model1.toFixed(3),
+      dataPoint.model2.toFixed(3),
+      dataPoint.bufferQueue.toString(),
+      dataPoint.bufferDropped.toString(),
+    ]);
+
+    // Combine header and rows
+    const csvContent = [csvHeaders, ...csvRows]
+      .map((row) => row.join(","))
+      .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `performance_chart_${Date.now()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [chartData]);
 
   // Reset chart data when processing starts
   useEffect(() => {
@@ -39,10 +84,12 @@ export const PerformanceChartsSection: React.FC<
       setIsCollectingData(true);
       setStartTime(Date.now());
       setLastChartUpdate(Date.now());
+      setCanExport(false);
     } else if (!isRealTimeProcessing && !isProcessing && isCollectingData) {
       setIsCollectingData(false);
       // Automatically show full data when processing ends
       setDisplayData(chartData);
+      setCanExport(chartData.length > 0);
     }
   }, [isRealTimeProcessing, isProcessing, isCollectingData, chartData]);
 
@@ -123,6 +170,14 @@ export const PerformanceChartsSection: React.FC<
 
   return (
     <section className="space-y-4">
+      <Button
+        variant={"outline"}
+        className="mt-2 w-full"
+        disabled={!canExport}
+        onClick={exportChartData}
+      >
+        Export (CSV)
+      </Button>
       <Card>
         <CardHeader>
           <CardTitle>Manajemen Buffer</CardTitle>
