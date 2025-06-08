@@ -180,7 +180,7 @@ export const PerformanceChartsSection: React.FC<
       </Button>
       <Card>
         <CardHeader>
-          <CardTitle>Manajemen Buffer</CardTitle>
+          <CardTitle>Buffer</CardTitle>
         </CardHeader>
         <CardContent>
           <Chart
@@ -195,7 +195,7 @@ export const PerformanceChartsSection: React.FC<
 
       <Card>
         <CardHeader>
-          <CardTitle>Performa Worklet dan Worker</CardTitle>
+          <CardTitle>Worklet & Worker</CardTitle>
         </CardHeader>
         <CardContent>
           <Chart
@@ -210,7 +210,7 @@ export const PerformanceChartsSection: React.FC<
 
       <Card>
         <CardHeader>
-          <CardTitle>Performa Model DTLN</CardTitle>
+          <CardTitle>Model</CardTitle>
         </CardHeader>
         <CardContent>
           <Chart

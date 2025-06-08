@@ -51,20 +51,23 @@ export default function Home() {
                     Rumusan Masalah
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Identifikasi permasalahan dalam penelitian
+                    Rumusan masalah penelitian ini adalah:
                   </p>
                 </div>
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-8 pb-8">
-              <div className="pl-18">
-                <p className="text-muted-foreground text-lg leading-relaxed">
-                  Lorem ipsum dolor sit amet consectetur adipisicing elit.
-                  Distinctio dicta quam rem perferendis, molestiae labore
-                  dolorem optio debitis itaque quibusdam. Necessitatibus
-                  corporis vel perspiciatis minima assumenda sint quaerat
-                  numquam eligendi.
-                </p>
+              <div className="pl-18 space-y-4">
+                <ol className="text-muted-foreground text-lg leading-relaxed space-y-3 list-decimal list-inside">
+                  <li>
+                    Bagaimana mengidentifikasi pengaruh gangguan suara external
+                    terhadap keaslian suara?
+                  </li>
+                  <li>
+                    Bagaimana meningkatkan kualitas audio secara realtime dalam
+                    komunikasi berbasis WebRTC?
+                  </li>
+                </ol>
               </div>
             </AccordionContent>
           </AccordionItem>
@@ -81,20 +84,29 @@ export default function Home() {
                     Batasan Masalah
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Ruang lingkup dan keterbatasan penelitian
+                    Ruang lingkup permasalahan pada penelitian ini didasarkan
+                    pada:
                   </p>
                 </div>
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-8 pb-8">
-              <div className="pl-18">
-                <p className="text-muted-foreground text-lg leading-relaxed">
-                  Lorem ipsum dolor, sit amet consectetur adipisicing elit.
-                  Eaque optio adipisci repellendus neque rerum ab doloremque
-                  impedit? Est tenetur aliquam iste molestiae dolores. Sequi
-                  exercitationem inventore similique omnis iure dolorum
-                  molestias maiores veniam quidem saepe nisi, eos voluptates?
-                </p>
+              <div className="pl-18 space-y-4">
+                <ol className="text-muted-foreground text-lg leading-relaxed space-y-3 list-decimal list-inside">
+                  <li>
+                    Penggunaan WebRTC peer-to-peer untuk komunikasi real-time
+                    dengan dua client yang saling terhubung.
+                  </li>
+                  <li>
+                    Implementasi model pre-trained DTLN yang telah disediakan di
+                    repository GitHub DTLN tanpa pelatihan ulang.
+                  </li>
+                  <li>
+                    Pengujian dilakukan menggunakan audio file rekaman yang
+                    diproses secara real-time dan dikirimkan ke client lainnya.
+                  </li>
+                  <li>Penggunaan browser dan Next.js dalam pengujian.</li>
+                </ol>
               </div>
             </AccordionContent>
           </AccordionItem>
@@ -109,19 +121,23 @@ export default function Home() {
                 <div className="text-left">
                   <h2 className="text-2xl font-bold tracking-tight">Tujuan</h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Target yang ingin dicapai dalam penelitian
+                    Tujuan dari dilakukannya skripsi ini adalah sebagai berikut:
                   </p>
                 </div>
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-8 pb-8">
-              <div className="pl-18">
-                <p className="text-muted-foreground text-lg leading-relaxed">
-                  Lorem ipsum dolor sit amet consectetur adipisicing elit.
-                  Officia tempora, ipsam voluptas labore nostrum dolore
-                  temporibus necessitatibus ipsa ad pariatur! Quod
-                  exercitationem vel distinctio consectetur.
-                </p>
+              <div className="pl-18 space-y-4">
+                <ol className="text-muted-foreground text-lg leading-relaxed space-y-3 list-decimal list-inside">
+                  <li>
+                    Menganalisis real-time noise suppression dengan model DTLN
+                    dapat meningkatkan kualitas suara peer-to-peer WebRTC.
+                  </li>
+                  <li>
+                    Mengidentifikasi dalam penerapan real-time noise suppression
+                    dengan model DTLN.
+                  </li>
+                </ol>
               </div>
             </AccordionContent>
           </AccordionItem>
@@ -136,19 +152,79 @@ export default function Home() {
                 <div className="text-left">
                   <h2 className="text-2xl font-bold tracking-tight">Manfaat</h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Kegunaan dan dampak hasil penelitian
+                    Hasil penelitian ini diharapkan akan memberikan manfaat:
                   </p>
                 </div>
               </div>
             </AccordionTrigger>
             <AccordionContent className="px-8 pb-8">
-              <div className="pl-18">
-                <p className="text-muted-foreground text-lg leading-relaxed">
-                  Lorem ipsum dolor sit amet consectetur adipisicing elit. Magni
-                  aliquam hic quo sit consequatur repellendus sequi. Quam
-                  sapiente nemo suscipit. Vel assumenda quaerat dignissimos
-                  necessitatibus.
-                </p>
+              <div className="pl-18 space-y-6">
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg text-foreground">
+                    Untuk Peneliti
+                  </h3>
+                  <ol className="text-muted-foreground text-lg leading-relaxed space-y-3 list-decimal list-inside">
+                    <li>
+                      Memperoleh pemahaman yang mendalam tentang penerapan model
+                      DTLN dalam meningkatkan kualitas suara dalam komunikasi
+                      real-time berbasis WebRTC.
+                    </li>
+                    <li>
+                      Mengembangkan keterampilan dalam implementasi dan
+                      pengujian teknologi jaringan saraf untuk pemrosesan audio.
+                    </li>
+                    <li>
+                      Menyumbangkan pengetahuan baru yang dapat digunakan
+                      sebagai referensi untuk penelitian selanjutnya dalam
+                      bidang komunikasi real-time dan pemrosesan sinyal audio.
+                    </li>
+                  </ol>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg text-foreground">
+                    Untuk Politeknik
+                  </h3>
+                  <ol className="text-muted-foreground text-lg leading-relaxed space-y-3 list-decimal list-inside">
+                    <li>
+                      Menyediakan bukti empiris dan studi kasus yang dapat
+                      digunakan untuk meningkatkan kurikulum di bidang teknologi
+                      informasi dan komunikasi.
+                    </li>
+                    <li>
+                      Menambah wawasan dan literatur ilmiah di perpustakaan
+                      politeknik terkait teknologi WebRTC dan jaringan saraf
+                      untuk pemrosesan audio.
+                    </li>
+                    <li>
+                      Memperkuat reputasi akademik politeknik dengan kontribusi
+                      penelitian yang relevan dan terkini.
+                    </li>
+                  </ol>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg text-foreground">
+                    Untuk Pembaca
+                  </h3>
+                  <ol className="text-muted-foreground text-lg leading-relaxed space-y-3 list-decimal list-inside">
+                    <li>
+                      Memberikan informasi dan pengetahuan tentang penggunaan
+                      teknologi jaringan saraf untuk penekanan kebisingan dalam
+                      komunikasi real-time.
+                    </li>
+                    <li>
+                      Menyediakan wawasan tentang tantangan dan solusi dalam
+                      meningkatkan kualitas audio dalam komunikasi berbasis
+                      WebRTC.
+                    </li>
+                    <li>
+                      Menjadi referensi berguna bagi pembaca yang tertarik atau
+                      bekerja di bidang komunikasi digital, pemrosesan sinyal,
+                      dan teknologi jaringan saraf.
+                    </li>
+                  </ol>
+                </div>
               </div>
             </AccordionContent>
           </AccordionItem>

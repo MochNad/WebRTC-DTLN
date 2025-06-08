@@ -358,7 +358,7 @@ export function SpectogramSection({
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Audio Sebelum</CardTitle>
+          <CardTitle>Sebelum</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="relative w-full">
@@ -402,7 +402,7 @@ export function SpectogramSection({
 
       <Card>
         <CardHeader>
-          <CardTitle>Audio Sesudah</CardTitle>
+          <CardTitle>Sesudah</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="relative w-full">

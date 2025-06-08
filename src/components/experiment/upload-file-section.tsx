@@ -179,7 +179,7 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
     <section className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Upload & Proses Audio</CardTitle>
+          <CardTitle>Audio</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -262,13 +262,13 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
 
       <Card>
         <CardHeader>
-          <CardTitle>Spesifikasi File Audio</CardTitle>
+          <CardTitle>Spesifikasi</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div className="space-y-2">
               <span className="text-sm font-medium text-muted-foreground">
-                Nama File
+                Nama
               </span>
               <p className="text-sm font-semibold break-all">
                 {selectedFile?.name || "-"}
@@ -277,7 +277,7 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
 
             <div className="space-y-2">
               <span className="text-sm font-medium text-muted-foreground">
-                Ukuran File
+                Ukuran
               </span>
               <p className="text-sm font-semibold">
                 {selectedFile
