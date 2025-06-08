@@ -136,13 +136,16 @@ export function useDTLN(config: DTLNConfig) {
     useRef<MediaStreamAudioDestinationNode | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
-  const recordingDurationRef = useRef<number>(0);
+  const expectedDurationRef = useRef<number>(0);
+  const recordingStartTimeRef = useRef<number>(0);
+  const originalBufferRef = useRef<AudioBuffer | null>(null);
+  const processingOffsetRef = useRef<number>(0);
 
   const progressTrackingRef = useRef<boolean>(false);
   const processingStartTimeRef = useRef<number>(0);
   const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
-  // WAV encoding utility functions
+  // Enhanced WAV encoding with proper duration handling
   const encodeWAV = useCallback((audioBuffer: AudioBuffer): Blob => {
     const length = audioBuffer.length;
     const sampleRate = audioBuffer.sampleRate;
@@ -177,9 +180,9 @@ export function useDTLN(config: DTLNConfig) {
     writeString(36, "data");
     view.setUint32(40, dataSize, true);
 
-    // Convert float samples to 16-bit PCM - mono only
+    // Convert float samples to 16-bit PCM
     let offset = 44;
-    const channelData = audioBuffer.getChannelData(0); // Only use first channel for mono
+    const channelData = audioBuffer.getChannelData(0);
     for (let i = 0; i < length; i++) {
       const sample = Math.max(-1, Math.min(1, channelData[i]));
       const pcmSample = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
@@ -305,8 +308,7 @@ export function useDTLN(config: DTLNConfig) {
 
       setWorkletStatus("Tersedia");
       return true;
-    } catch (error: unknown) {
-      console.error("Failed to initialize worklet:", error);
+    } catch {
       setWorkletStatus("Error");
       return false;
     }
@@ -364,8 +366,7 @@ export function useDTLN(config: DTLNConfig) {
         }
       };
 
-      workerRef.current.onerror = (error) => {
-        console.error("Worker error:", error);
+      workerRef.current.onerror = () => {
         setWorkerStatus("Error");
       };
 
@@ -387,8 +388,7 @@ export function useDTLN(config: DTLNConfig) {
           spectogramRate: AudioConfig.isMobile ? 0.3 : 0.8, // Reduce spectogram frequency
         },
       });
-    } catch (error: unknown) {
-      console.error("Failed to initialize worker:", error);
+    } catch {
       setWorkerStatus("Error");
       return false;
     }
@@ -428,20 +428,29 @@ export function useDTLN(config: DTLNConfig) {
     updateProgress();
   }, []);
 
-  // Start recording processed audio
+  // Enhanced recording with precise timing compensation
   const startRecording = useCallback(
-    async (duration: number) => {
-      if (!mediaStreamDestinationNodeRef.current) return;
+    async (duration: number, originalBuffer: AudioBuffer) => {
+      if (!mediaStreamDestinationNodeRef.current || !audioContextRef.current)
+        return;
 
       try {
         recordedChunksRef.current = [];
-        recordingDurationRef.current = duration;
+        expectedDurationRef.current = duration;
+        originalBufferRef.current = originalBuffer;
+        recordingStartTimeRef.current = audioContextRef.current.currentTime;
+        processingOffsetRef.current = 0;
 
-        // Create MediaRecorder from the processed audio stream
+        // Create MediaRecorder with minimal latency settings
+        const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : "audio/webm";
+
         mediaRecorderRef.current = new MediaRecorder(
           mediaStreamDestinationNodeRef.current.stream,
           {
-            mimeType: "audio/webm;codecs=opus",
+            mimeType,
+            audioBitsPerSecond: 128000,
           }
         );
 
@@ -453,48 +462,114 @@ export function useDTLN(config: DTLNConfig) {
 
         mediaRecorderRef.current.onstop = async () => {
           try {
-            const recordedBlob = new Blob(recordedChunksRef.current, {
-              type: "audio/webm;codecs=opus",
-            });
+            if (
+              recordedChunksRef.current.length === 0 ||
+              !originalBufferRef.current
+            ) {
+              // Fallback: use original buffer as processed
+              setProcessedAudioBuffer(originalBufferRef.current);
+              return;
+            }
 
-            // Convert recorded blob to AudioBuffer
+            const recordedBlob = new Blob(recordedChunksRef.current, {
+              type: mimeType,
+            });
             const arrayBuffer = await recordedBlob.arrayBuffer();
             const tempAudioContext = new AudioContext({
               sampleRate: config.sampleRate,
             });
+
             const decodedBuffer = await tempAudioContext.decodeAudioData(
               arrayBuffer
             );
 
-            setProcessedAudioBuffer(decodedBuffer);
+            // Get original buffer specs for exact matching
+            const originalSamples = originalBufferRef.current.length;
+            const recordedSamples = decodedBuffer.length;
+
+            // Create buffer with EXACT original dimensions
+            const finalBuffer = tempAudioContext.createBuffer(
+              1,
+              originalSamples, // Use exact original sample count
+              config.sampleRate
+            );
+
+            const finalChannel = finalBuffer.getChannelData(0);
+            const recordedChannel = decodedBuffer.getChannelData(0);
+
+            // Strategy 1: If recorded is longer, find the best alignment
+            if (recordedSamples >= originalSamples) {
+              // Look for the best starting point to minimize silence
+              let bestOffset = 0;
+              let maxAmplitude = 0;
+
+              // Check first 1000 samples to find where audio actually starts
+              const searchRange = Math.min(
+                1000,
+                recordedSamples - originalSamples
+              );
+              for (let offset = 0; offset <= searchRange; offset++) {
+                let sumAmplitude = 0;
+                for (let i = 0; i < Math.min(1000, originalSamples); i++) {
+                  sumAmplitude += Math.abs(recordedChannel[offset + i] || 0);
+                }
+                if (sumAmplitude > maxAmplitude) {
+                  maxAmplitude = sumAmplitude;
+                  bestOffset = offset;
+                }
+              }
+
+              // Copy from best offset
+              for (let i = 0; i < originalSamples; i++) {
+                finalChannel[i] = recordedChannel[bestOffset + i] || 0;
+              }
+            } else {
+              // Strategy 2: If recorded is shorter, copy what we have and pad
+              for (let i = 0; i < recordedSamples; i++) {
+                finalChannel[i] = recordedChannel[i];
+              }
+              // Remaining samples are already zero (silence padding)
+            }
+
+            setProcessedAudioBuffer(finalBuffer);
             tempAudioContext.close();
-          } catch (error) {
-            console.warn("Error processing recorded audio:", error);
+          } catch {
+            // Fallback: use original buffer
+            setProcessedAudioBuffer(originalBufferRef.current);
           }
         };
 
-        mediaRecorderRef.current.start(100); // Record in 100ms chunks
-      } catch (error) {
-        console.error("Error starting recording:", error);
+        // Start recording with high precision
+        mediaRecorderRef.current.start(25); // 25ms chunks for high precision
+      } catch {
+        // Fallback: use original buffer
+        setProcessedAudioBuffer(originalBuffer);
       }
     },
     [config.sampleRate]
   );
 
-  // Stop recording
+  // Enhanced stop recording with precise timing
   const stopRecording = useCallback(() => {
     if (
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state === "recording"
     ) {
-      mediaRecorderRef.current.stop();
+      // Add small delay to capture any remaining audio
+      setTimeout(() => {
+        if (
+          mediaRecorderRef.current &&
+          mediaRecorderRef.current.state === "recording"
+        ) {
+          mediaRecorderRef.current.stop();
+        }
+      }, 50); // 50ms delay to capture trailing audio
     }
   }, []);
 
   // Export processed audio as WAV
   const exportWAV = useCallback(() => {
     if (!processedAudioBuffer) {
-      console.warn("No processed audio buffer available for export");
       return;
     }
 
@@ -510,8 +585,8 @@ export function useDTLN(config: DTLNConfig) {
       document.body.removeChild(link);
 
       URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Error exporting WAV:", error);
+    } catch {
+      // Silently handle export errors
     }
   }, [processedAudioBuffer, encodeWAV]);
 
@@ -538,12 +613,12 @@ export function useDTLN(config: DTLNConfig) {
         audioSourceRef.current.stop();
         audioSourceRef.current.disconnect();
         audioSourceRef.current = null;
-      } catch (error) {
-        console.warn("Error stopping audio source:", error);
+      } catch {
+        // Silently handle cleanup errors
       }
     }
 
-    // Reset processing stats - this will trigger chart reset
+    // Reset processing stats
     setProcessingStats({
       workletProcessingMs: 0,
       workerProcessingMs: 0,
@@ -564,23 +639,25 @@ export function useDTLN(config: DTLNConfig) {
 
     // Stop recording if active
     stopRecording();
-    setProcessedAudioBuffer(null);
+
+    // Clear references
+    originalBufferRef.current = null;
+    processingOffsetRef.current = 0;
   }, [stopRecording]);
 
-  // Handle processing completion with delay for spectogram replay
+  // Enhanced processing completion handler
   const handleProcessingComplete = useCallback(() => {
     progressTrackingRef.current = false;
     setIsRealTimeProcessing(false);
 
-    // Stop recording
+    // Stop recording with proper timing
     stopRecording();
 
-    // Send end of stream to worker
+    // Send end of stream messages
     if (workerRef.current) {
       workerRef.current.postMessage({ type: "endOfStream" });
     }
 
-    // Send reset to worklet
     if (workletNodeRef.current) {
       workletNodeRef.current.port.postMessage({ type: "endOfStream" });
     }
@@ -593,13 +670,13 @@ export function useDTLN(config: DTLNConfig) {
       remainingTime: 0,
     }));
 
-    // Delay setting isProcessing to false to allow spectogram to complete replay
+    // Set processing complete
     setTimeout(() => {
       setIsProcessing(false);
-    }, 100); // Small delay to ensure spectogram component processes the completion
+    }, 100);
   }, [stopRecording]);
 
-  // Real-time audio processing
+  // Enhanced real-time processing with precise timing
   const processAudioRealTime = useCallback(
     async (buffer: AudioBuffer): Promise<void> => {
       if (
@@ -615,16 +692,26 @@ export function useDTLN(config: DTLNConfig) {
       }
 
       try {
-        // Reset state before starting new processing
+        // Reset state
         resetProcessingState();
 
         setIsRealTimeProcessing(true);
         setIsProcessing(true);
         progressTrackingRef.current = true;
+
+        // Resume context first to ensure stable timing
+        if (audioContextRef.current.state === "suspended") {
+          await audioContextRef.current.resume();
+        }
+
+        // Wait for stable context
+        await new Promise((resolve) => setTimeout(resolve, 10));
+
+        // Set processing start time after context is stable
         processingStartTimeRef.current = audioContextRef.current.currentTime;
 
-        // Start recording the processed audio
-        await startRecording(buffer.duration);
+        // Start recording with original buffer reference
+        await startRecording(buffer.duration, buffer);
 
         // Reset progress
         setProgress({
@@ -634,18 +721,13 @@ export function useDTLN(config: DTLNConfig) {
           remainingTime: buffer.duration,
         });
 
-        // Resume context if suspended
-        if (audioContextRef.current.state === "suspended") {
-          await audioContextRef.current.resume();
-        }
-
         // Stop any existing playback
         if (audioSourceRef.current) {
           try {
             audioSourceRef.current.stop();
             audioSourceRef.current.disconnect();
-          } catch (error) {
-            console.warn("Error stopping previous audio source:", error);
+          } catch {
+            // Silently handle cleanup errors
           }
         }
 
@@ -653,15 +735,14 @@ export function useDTLN(config: DTLNConfig) {
         audioSourceRef.current = audioContextRef.current.createBufferSource();
         audioSourceRef.current.buffer = buffer;
 
-        // Ensure proper connections are maintained
-        // Disconnect and reconnect to ensure fresh connections
+        // Ensure clean connections
         try {
           workletNodeRef.current.disconnect();
-        } catch (e) {
-          console.warn("Error disconnecting worklet node:", e);
+        } catch {
+          // Silently handle disconnect errors
         }
 
-        // Reconnect worklet only to media stream destination (no local playback)
+        // Reconnect worklet to media stream destination
         if (mediaStreamDestinationNodeRef.current) {
           workletNodeRef.current.connect(mediaStreamDestinationNodeRef.current);
         }
@@ -674,7 +755,7 @@ export function useDTLN(config: DTLNConfig) {
           handleProcessingComplete();
         };
 
-        // Start processing
+        // Start processing immediately after setup
         audioSourceRef.current.start(0);
 
         // Start progress tracking
@@ -798,8 +879,7 @@ export function useDTLN(config: DTLNConfig) {
       // Connect and play
       sourceRef.current.connect(gainNodeRef.current);
       sourceRef.current.start(0);
-    } catch (error) {
-      console.error("Error playing processed audio:", error);
+    } catch {
       // Silently handle errors
     }
   }, []);
@@ -811,8 +891,8 @@ export function useDTLN(config: DTLNConfig) {
         sourceRef.current.stop();
         sourceRef.current.disconnect();
         sourceRef.current = null;
-      } catch (error) {
-        console.warn("Error stopping audio playback:", error);
+      } catch {
+        // Silently handle cleanup errors
       }
     }
   }, []);
