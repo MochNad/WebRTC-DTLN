@@ -129,9 +129,9 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
       setFileSpecs(null);
       setSelectedFile(null);
 
-      const validationError = validateAudioFile(file);
-      if (validationError) {
-        setValidationError(validationError);
+      const validationErrorMsg = validateAudioFile(file);
+      if (validationErrorMsg) {
+        setValidationError(validationErrorMsg);
         // Reset file input on validation error
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
@@ -156,7 +156,6 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
             // Ignore close errors
           });
         } catch (error) {
-          console.error("Processing failed:", error);
           const errorMessage =
             error instanceof Error ? error.message : "Processing failed";
           setValidationError(errorMessage);
@@ -250,7 +249,7 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
             </div>
 
             <Button
-              variant={"outline"}
+              variant="outline"
               className="mt-2 w-full"
               disabled={!processedAudioBuffer || isProcessing}
               onClick={onExportWAV}
