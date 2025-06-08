@@ -160,8 +160,8 @@ export default function Experiment() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-6xl space-y-8">
         <HeaderPage
-          title="Eksperimen WebRTC & DTLN"
-          description="Uji coba sistem komunikasi real-time dengan noise reduction AI"
+          title="Eksperimen"
+          description="Uji coba WebRTC & DTLN"
         />
 
         {/* Remote Audio Element - Hidden controls */}
@@ -184,11 +184,10 @@ export default function Experiment() {
                 </div>
                 <div className="text-left">
                   <h2 className="text-2xl font-bold tracking-tight">
-                    Verifikasi Sistem
+                    Inisialisasi
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Pastikan DTLN worker dan audio worklet telah dimuat dengan
-                    benar sebelum memulai eksperimen.
+                    Pastikan status Worklet dan Worker tersedia.
                   </p>
                 </div>
               </div>
@@ -210,12 +209,10 @@ export default function Experiment() {
                 </div>
                 <div className="text-left">
                   <h2 className="text-2xl font-bold tracking-tight">
-                    Komunikasi WebRTC
+                    Panggilan
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Buat atau bergabung ke panggilan video menggunakan audio
-                    yang telah diproses DTLN untuk kualitas suara yang lebih
-                    jernih.
+                    Buat atau gabung dengan kode, lalu pastikan status lokal dan remote terhubung.
                   </p>
                 </div>
               </div>
@@ -241,11 +238,10 @@ export default function Experiment() {
                 </div>
                 <div className="text-left">
                   <h2 className="text-2xl font-bold tracking-tight">
-                    Setup Audio Processing
+                    Unggah
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Aktifkan pemrosesan audio real-time dengan DTLN untuk
-                    mengurangi noise pada input suara Anda.
+                    Pilih audio lalu akan diproses secara realtime.
                   </p>
                 </div>
               </div>
@@ -274,11 +270,10 @@ export default function Experiment() {
                 </div>
                 <div className="text-left">
                   <h2 className="text-2xl font-bold tracking-tight">
-                    Visualisasi Spektogram
+                    Spectrogram
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Lihat perbedaan spektrum frekuensi audio sebelum dan sesudah
-                    pemrosesan DTLN secara real-time.
+                    Visualisasi antara audio sebelum dan sesudah diproses.
                   </p>
                 </div>
               </div>
@@ -300,11 +295,10 @@ export default function Experiment() {
                 </div>
                 <div className="text-left">
                   <h2 className="text-2xl font-bold tracking-tight">
-                    Monitoring Performa
+                    Performa
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Pantau performa sistem secara real-time untuk memastikan
-                    pemrosesan audio berjalan optimal.
+                    Pantau buffer, worklet, worker dan model berjalan.
                   </p>
                 </div>
               </div>

@@ -77,7 +77,7 @@ export function WebRTCSection({
     <section className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Panggilan WebRTC</CardTitle>
+          <CardTitle>WebRTC</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-4 md:flex-row">
