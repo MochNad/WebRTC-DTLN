@@ -1,36 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# WebRTC-DTLN
 
-## Getting Started
+Proyek ini adalah aplikasi [Next.js](https://nextjs.org) yang mengintegrasikan teknologi WebRTC dengan algoritma Deep Noise Suppression (DTLN) untuk komunikasi audio real-time dengan pengurangan noise.
 
-First, run the development server:
+## Tentang Proyek
+
+WebRTC-DTLN menggabungkan:
+
+- **WebRTC**: Untuk komunikasi real-time peer-to-peer
+- **DTLN (Dual-Signal Transformation LSTM Network)**: Algoritma AI untuk mengurangi noise pada audio
+- **Next.js**: Framework React untuk pengembangan web modern
+
+### Fitur Utama
+
+- 🎙️ Komunikasi audio real-time
+- 🔇 Pengurangan noise otomatis menggunakan AI
+- 🌐 Koneksi peer-to-peer tanpa server perantara
+- 📱 Responsif untuk desktop dan mobile
+- ⚡ Performa tinggi dengan Next.js
+
+## Persyaratan Sistem
+
+- Node.js 18.0 atau lebih baru
+- npm, yarn, pnpm, atau bun
+- Browser modern yang mendukung WebRTC
+- File audio WAV (mono, 16kHz) atau download dari [Dataset-DTLN Repository](https://github.com/MochNad/Dataset-DTLN)
+
+## Instalasi
+
+### 1. Clone Repository
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/username/WebRTC-DTLN.git
+cd WebRTC-DTLN
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Install Dependencies
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Pilih salah satu package manager:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# Menggunakan npm
+npm install
 
-## Learn More
+# Atau menggunakan yarn
+yarn install
 
-To learn more about Next.js, take a look at the following resources:
+# Atau menggunakan pnpm
+pnpm install
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# Atau menggunakan bun
+bun install
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 3. Konfigurasi Environment
 
-## Deploy on Vercel
+Salin file `.env.example` menjadi `.env` dan isi konfigurasi Firestore:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+cp .env.example .env
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Edit file `.env` dan tambahkan kredensial Firestore Anda.
+
+### 4. Siapkan File Audio
+
+Download dataset audio dari [Dataset-DTLN Repository](https://github.com/MochNad/Dataset-DTLN) atau siapkan file audio WAV dengan spesifikasi:
+
+- Format: WAV
+- Channel: Mono
+- Sample Rate: 16kHz
+
+### 5. Jalankan Development Server
+
+**PENTING**: Aplikasi harus dijalankan dengan HTTPS untuk WebRTC berfungsi dengan baik.
+
+```bash
+# Menggunakan npm
+npm run dev -- --experimental-https
+
+# Atau menggunakan yarn
+yarn dev -- --experimental-https
+
+# Atau menggunakan pnpm
+pnpm dev -- --experimental-https
+
+# Atau menggunakan bun
+bun dev -- --experimental-https
+```
+
+### 6. Akses Aplikasi
+
+Buka [https://localhost:3000](https://localhost:3000) di browser Anda.
