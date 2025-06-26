@@ -15,7 +15,6 @@ export default function Home() {
         <div className="mt-8 space-y-6 text-center">
           <h1 className="text-xl font-bold leading-tight tracking-tight md:text-2xl lg:text-3xl">
             ANALISIS PENERAPAN REAL-TIME NOISE SUPPRESSION PEER-TO-PEER WEBRTC
-            ANALISIS PENERAPAN REAL-TIME NOISE SUPPRESSION PEER-TO-PEER WEBRTC
             DENGAN METODE PRE-TRAINED DTLN (DUAL-SIGNAL TRANSFORMATION LSTM
             NETWORK)
           </h1>
