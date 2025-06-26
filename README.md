@@ -90,4 +90,13 @@ bun dev -- --experimental-https
 
 ### 6. Akses Aplikasi
 
-Buka [https://localhost:3000](https://localhost:3000) di browser Anda.
+Setelah server berjalan, Anda dapat mengakses aplikasi melalui:
+
+- **Local**: [https://localhost:3000](https://localhost:3000) - untuk akses dari komputer yang sama
+- **Network**: https://[IP-ADDRESS]:3000 - untuk akses dari perangkat lain dalam jaringan yang sama
+
+**Catatan**:
+
+- IP address akan otomatis ditampilkan di terminal saat menjalankan `npm run dev -- --experimental-https`
+- IP address bervariasi tergantung jaringan (WiFi/Ethernet) yang digunakan
+- Untuk testing peer-to-peer, pastikan semua perangkat terhubung ke jaringan yang sama
