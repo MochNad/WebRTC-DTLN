@@ -30,6 +30,7 @@ interface UploadFileSectionProps {
   remoteStatus: string;
   processedAudioBuffer: AudioBuffer | null;
   onExportWAV: () => void;
+  logs: Array<{ timestamp: string; type: string; message: string }>;
 }
 
 const formatTime = (seconds: number): string => {
@@ -71,6 +72,7 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
   remoteStatus,
   processedAudioBuffer,
   onExportWAV,
+  logs,
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileSpecs, setFileSpecs] = useState<FileSpecs | null>(null);
@@ -326,6 +328,48 @@ export const UploadFileSection: React.FC<UploadFileSectionProps> = ({
               <p className="text-sm font-semibold">
                 {fileSpecs ? formatTime(fileSpecs.duration) : "-"}
               </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Log</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-48 overflow-y-auto border rounded-md p-3 bg-muted/50">
+            <div className="space-y-2 text-sm">
+              {logs.length === 0 ? (
+                <div className="text-xs text-muted-foreground text-center py-4">
+                  Belum ada aktivitas log
+                </div>
+              ) : (
+                logs.map((log, index) => (
+                  <div key={index} className="flex gap-2 text-xs">
+                    <span className="text-muted-foreground shrink-0 font-mono">
+                      {log.timestamp}
+                    </span>
+                    <span
+                      className={`shrink-0 px-1 rounded text-white font-medium ${
+                        log.type === "ERROR"
+                          ? "bg-red-600"
+                          : log.type === "SUCCESS"
+                          ? "bg-green-600"
+                          : log.type === "WARNING"
+                          ? "bg-yellow-600"
+                          : log.type === "DTLN"
+                          ? "bg-blue-600"
+                          : log.type === "WEBRTC"
+                          ? "bg-purple-600"
+                          : "bg-gray-600"
+                      }`}
+                    >
+                      {log.type}
+                    </span>
+                    <span className="text-foreground">{log.message}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </CardContent>

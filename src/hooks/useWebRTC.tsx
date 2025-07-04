@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { firestore } from "@/lib/firebase";
 
 interface WebRTCState {
@@ -9,7 +9,13 @@ interface WebRTCState {
   remoteStatus: string;
 }
 
-export const useWebRTC = () => {
+interface LogEntry {
+  timestamp: string;
+  type: string;
+  message: string;
+}
+
+export const useWebRTC = (onLog?: (log: LogEntry) => void) => {
   const [state, setState] = useState<WebRTCState>({
     pc: null,
     remoteStream: null,
@@ -18,7 +24,26 @@ export const useWebRTC = () => {
     remoteStatus: "Terputus",
   });
 
+  // Add logging helper
+  const addLog = useCallback(
+    (type: string, message: string) => {
+      if (onLog) {
+        const timestamp = new Date().toLocaleTimeString("id-ID", {
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          fractionalSecondDigits: 3,
+        });
+        onLog({ timestamp, type, message });
+      }
+    },
+    [onLog]
+  );
+
   useEffect(() => {
+    addLog("WEBRTC", "Inisialisasi WebRTC PeerConnection...");
+
     const newPc = new RTCPeerConnection({
       iceServers: [
         {
@@ -33,6 +58,8 @@ export const useWebRTC = () => {
 
     const newRemoteStream = new MediaStream();
 
+    addLog("SUCCESS", "WebRTC PeerConnection berhasil dibuat");
+
     setState((prev) => ({
       ...prev,
       pc: newPc,
@@ -40,6 +67,8 @@ export const useWebRTC = () => {
     }));
 
     newPc.ontrack = (event) => {
+      addLog("WEBRTC", "Menerima remote audio track");
+
       // Add tracks from the first stream to our remote stream
       if (event.streams && event.streams[0]) {
         event.streams[0].getTracks().forEach((track) => {
@@ -59,8 +88,18 @@ export const useWebRTC = () => {
         ...prev,
         remoteStatus: "Terhubung",
       }));
+
+      addLog("SUCCESS", "Remote audio berhasil terhubung");
     };
-  }, []);
+
+    newPc.oniceconnectionstatechange = () => {
+      addLog("WEBRTC", `ICE connection state: ${newPc.iceConnectionState}`);
+    };
+
+    newPc.onconnectionstatechange = () => {
+      addLog("WEBRTC", `Connection state: ${newPc.connectionState}`);
+    };
+  }, [addLog]);
 
   const createCall = async (
     callInput: HTMLInputElement | null,
@@ -68,74 +107,97 @@ export const useWebRTC = () => {
   ) => {
     if (!state.pc) return null;
 
-    // Create call document first to get ID immediately
-    const callDoc = firestore.collection("calls").doc();
-    const callId = callDoc.id;
+    try {
+      addLog("WEBRTC", "Membuat panggilan baru...");
 
-    // Set the call ID in input immediately
-    if (callInput) {
-      callInput.value = callId;
-    }
+      // Create call document first to get ID immediately
+      const callDoc = firestore.collection("calls").doc();
+      const callId = callDoc.id;
 
-    // Add local stream tracks to peer connection
-    if (localStreamToSend) {
-      const tracks = localStreamToSend.getTracks();
+      addLog("WEBRTC", `Call ID dibuat: ${callId}`);
 
-      tracks.forEach((track) => {
-        state.pc?.addTrack(track, localStreamToSend);
-      });
-    }
-
-    const offerCandidates = callDoc.collection("offerCandidates");
-    const answerCandidates = callDoc.collection("answerCandidates");
-
-    state.pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        offerCandidates.add(event.candidate.toJSON());
+      // Set the call ID in input immediately
+      if (callInput) {
+        callInput.value = callId;
       }
-    };
 
-    const offerDescription = await state.pc.createOffer();
-    await state.pc.setLocalDescription(offerDescription);
+      // Add local stream tracks to peer connection
+      if (localStreamToSend) {
+        const tracks = localStreamToSend.getTracks();
+        addLog(
+          "WEBRTC",
+          `Menambahkan ${tracks.length} track ke peer connection`
+        );
 
-    const offer = {
-      sdp: offerDescription.sdp,
-      type: offerDescription.type,
-    };
+        tracks.forEach((track) => {
+          state.pc?.addTrack(track, localStreamToSend);
+        });
 
-    await callDoc.set({ offer });
-
-    // Update status after call is successfully created
-    setState((prev) => ({
-      ...prev,
-      isCallActive: true,
-      localStatus: "Terhubung",
-      remoteStatus: "Menunggu...",
-    }));
-
-    callDoc.onSnapshot((snapshot) => {
-      const data = snapshot.data();
-      if (data?.answer && !state.pc?.currentRemoteDescription) {
-        const answerDescription = new RTCSessionDescription(data.answer);
-        state.pc?.setRemoteDescription(answerDescription);
-        setState((prev) => ({
-          ...prev,
-          localStatus: "Terhubung",
-          remoteStatus: "Terhubung",
-        }));
+        addLog("SUCCESS", "Local stream berhasil ditambahkan");
       }
-    });
 
-    answerCandidates.onSnapshot((snapshot) => {
-      snapshot.docChanges().forEach((change) => {
-        if (change.type === "added") {
-          const candidate = new RTCIceCandidate(change.doc.data());
-          state.pc?.addIceCandidate(candidate);
+      const offerCandidates = callDoc.collection("offerCandidates");
+      const answerCandidates = callDoc.collection("answerCandidates");
+
+      state.pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          offerCandidates.add(event.candidate.toJSON());
+          addLog("WEBRTC", "ICE candidate ditambahkan");
+        }
+      };
+
+      addLog("WEBRTC", "Membuat offer...");
+      const offerDescription = await state.pc.createOffer();
+      await state.pc.setLocalDescription(offerDescription);
+
+      const offer = {
+        sdp: offerDescription.sdp,
+        type: offerDescription.type,
+      };
+
+      await callDoc.set({ offer });
+      addLog("SUCCESS", "Offer berhasil dibuat dan disimpan");
+
+      // Update status after call is successfully created
+      setState((prev) => ({
+        ...prev,
+        isCallActive: true,
+        localStatus: "Terhubung",
+        remoteStatus: "Menunggu...",
+      }));
+
+      addLog("WEBRTC", "Menunggu jawaban dari remote peer...");
+
+      callDoc.onSnapshot((snapshot) => {
+        const data = snapshot.data();
+        if (data?.answer && !state.pc?.currentRemoteDescription) {
+          const answerDescription = new RTCSessionDescription(data.answer);
+          state.pc?.setRemoteDescription(answerDescription);
+          setState((prev) => ({
+            ...prev,
+            localStatus: "Terhubung",
+            remoteStatus: "Terhubung",
+          }));
+          addLog("SUCCESS", "Answer diterima dan remote peer terhubung");
         }
       });
-    });
 
-    return callId;
+      answerCandidates.onSnapshot((snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === "added") {
+            const candidate = new RTCIceCandidate(change.doc.data());
+            state.pc?.addIceCandidate(candidate);
+            addLog("WEBRTC", "Answer ICE candidate diterima");
+          }
+        });
+      });
+
+      return callId;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      addLog("ERROR", `Gagal membuat panggilan: ${errorMsg}`);
+      return null;
+    }
   };
 
   const joinCall = async (
@@ -146,15 +208,19 @@ export const useWebRTC = () => {
 
     // Validate callId format and existence
     if (!callId.trim()) {
+      addLog("ERROR", "Call ID tidak valid");
       return false;
     }
 
     try {
+      addLog("WEBRTC", `Bergabung dengan panggilan: ${callId}`);
+
       const callDoc = firestore.collection("calls").doc(callId);
       const callSnapshot = await callDoc.get();
 
       // Check if call document exists
       if (!callSnapshot.exists) {
+        addLog("ERROR", "Call ID tidak ditemukan");
         return false;
       }
 
@@ -162,8 +228,11 @@ export const useWebRTC = () => {
 
       // Check if call has valid offer
       if (!callData || !callData.offer) {
+        addLog("ERROR", "Call tidak memiliki offer yang valid");
         return false;
       }
+
+      addLog("SUCCESS", "Call ditemukan, memulai proses join...");
 
       // Only update status after validation passes
       setState((prev) => ({
@@ -176,10 +245,16 @@ export const useWebRTC = () => {
       // Add local stream tracks to peer connection
       if (localStreamToSend) {
         const tracks = localStreamToSend.getTracks();
+        addLog(
+          "WEBRTC",
+          `Menambahkan ${tracks.length} track ke peer connection`
+        );
 
         tracks.forEach((track) => {
           state.pc?.addTrack(track, localStreamToSend);
         });
+
+        addLog("SUCCESS", "Local stream berhasil ditambahkan");
       }
 
       const answerCandidates = callDoc.collection("answerCandidates");
@@ -188,9 +263,11 @@ export const useWebRTC = () => {
       state.pc.onicecandidate = (event) => {
         if (event.candidate) {
           answerCandidates.add(event.candidate.toJSON());
+          addLog("WEBRTC", "ICE candidate ditambahkan");
         }
       };
 
+      addLog("WEBRTC", "Menerima offer dan membuat answer...");
       const offerDescription = callData.offer;
       await state.pc.setRemoteDescription(
         new RTCSessionDescription(offerDescription)
@@ -205,19 +282,23 @@ export const useWebRTC = () => {
       };
 
       await callDoc.update({ answer });
+      addLog("SUCCESS", "Answer berhasil dibuat dan dikirim");
 
       offerCandidates.onSnapshot((snapshot) => {
         snapshot.docChanges().forEach((change) => {
           if (change.type === "added") {
             const candidate = new RTCIceCandidate(change.doc.data());
             state.pc?.addIceCandidate(candidate);
+            addLog("WEBRTC", "Offer ICE candidate diterima");
           }
         });
       });
 
+      addLog("SUCCESS", "Berhasil bergabung dengan panggilan");
       return true;
     } catch (error) {
-      console.error("Error joining call:", error);
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      addLog("ERROR", `Gagal bergabung panggilan: ${errorMsg}`);
       setState((prev) => ({
         ...prev,
         isCallActive: false,

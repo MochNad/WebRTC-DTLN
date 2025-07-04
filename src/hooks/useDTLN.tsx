@@ -102,7 +102,13 @@ interface ProcessingProgress {
   remainingTime: number;
 }
 
-export function useDTLN(config: DTLNConfig) {
+interface LogEntry {
+  timestamp: string;
+  type: string;
+  message: string;
+}
+
+export function useDTLN(config: DTLNConfig, onLog?: (log: LogEntry) => void) {
   const [workletStatus, setWorkletStatus] = useState<string>("Memuat...");
   const [workerStatus, setWorkerStatus] = useState<string>("Memuat...");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -193,9 +199,29 @@ export function useDTLN(config: DTLNConfig) {
     return new Blob([arrayBuffer], { type: "audio/wav" });
   }, []);
 
+  // Add logging helper
+  const addLog = useCallback(
+    (type: string, message: string) => {
+      if (onLog) {
+        const timestamp = new Date().toLocaleTimeString("id-ID", {
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          fractionalSecondDigits: 3,
+        });
+        onLog({ timestamp, type, message });
+      }
+    },
+    [onLog]
+  );
+
   // Initialize RingBuffer loading
   const loadRingBuffer = useCallback(async () => {
+    addLog("DTLN", "Memuat RingBuffer library...");
+
     if (typeof window.RingBuffer !== "undefined") {
+      addLog("DTLN", "RingBuffer sudah tersedia");
       return true;
     }
 
@@ -206,19 +232,26 @@ export function useDTLN(config: DTLNConfig) {
         if (window.RingBuffer) {
           (globalThis as unknown as GlobalThis).RingBufferConstructor =
             window.RingBuffer;
+          addLog("SUCCESS", "RingBuffer berhasil dimuat");
           resolve(true);
         } else {
+          addLog("ERROR", "RingBuffer gagal dimuat - tidak ditemukan");
           resolve(false);
         }
       };
-      script.onerror = () => resolve(false);
+      script.onerror = () => {
+        addLog("ERROR", "RingBuffer gagal dimuat - error loading script");
+        resolve(false);
+      };
       document.head.appendChild(script);
     });
-  }, []);
+  }, [addLog]);
 
   // Initialize Audio Context and Worklet
   const initializeWorklet = useCallback(async () => {
     try {
+      addLog("DTLN", "Inisialisasi Audio Context...");
+
       if (!window.AudioContext && !window.webkitAudioContext) {
         throw new Error("Web Audio API tidak didukung");
       }
@@ -234,16 +267,24 @@ export function useDTLN(config: DTLNConfig) {
 
       // Add mobile-specific optimizations
       if (AudioConfig.isMobile) {
-        contextOptions.latencyHint = "playback"; // Less aggressive latency for mobile
+        contextOptions.latencyHint = "playback";
+        addLog("DTLN", "Menggunakan optimasi mobile");
       }
 
       audioContextRef.current = new (window.AudioContext ||
         window.webkitAudioContext)(contextOptions);
 
+      addLog(
+        "SUCCESS",
+        `Audio Context dibuat (${audioContextRef.current.sampleRate}Hz)`
+      );
+
       // Add worklet processor
+      addLog("DTLN", "Memuat Audio Worklet processor...");
       await audioContextRef.current.audioWorklet.addModule(
         config.processorPath
       );
+      addLog("SUCCESS", "Audio Worklet processor berhasil dimuat");
 
       // Create worklet node with mobile-adaptive configuration
       workletNodeRef.current = new AudioWorkletNode(
@@ -266,12 +307,16 @@ export function useDTLN(config: DTLNConfig) {
         }
       );
 
+      addLog("SUCCESS", "Audio Worklet node berhasil dibuat");
+
       // Create MediaStreamDestinationNode for capturing processed audio
       mediaStreamDestinationNodeRef.current =
         audioContextRef.current.createMediaStreamDestination();
 
       // Connect worklet only to media stream destination (for WebRTC capture)
       workletNodeRef.current.connect(mediaStreamDestinationNodeRef.current);
+
+      addLog("SUCCESS", "Media stream destination terhubung");
 
       // Set up worklet message handling
       workletNodeRef.current.port.onmessage = (event) => {
@@ -307,16 +352,21 @@ export function useDTLN(config: DTLNConfig) {
       };
 
       setWorkletStatus("Tersedia");
+      addLog("SUCCESS", "DTLN Worklet siap digunakan");
       return true;
-    } catch {
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      addLog("ERROR", `Worklet gagal: ${errorMsg}`);
       setWorkletStatus("Error");
       return false;
     }
-  }, [config.processorPath, config.sampleRate, loadRingBuffer]);
+  }, [config.processorPath, config.sampleRate, loadRingBuffer, addLog]);
 
   // Initialize Worker
   const initializeWorker = useCallback(async () => {
     try {
+      addLog("DTLN", "Inisialisasi DTLN Worker...");
+
       // Create worker
       workerRef.current = new Worker(config.workerPath);
 
@@ -326,7 +376,13 @@ export function useDTLN(config: DTLNConfig) {
 
         switch (type) {
           case "ready":
-            setWorkerStatus(data.dtlnInitialized ? "Tersedia" : "Error");
+            const status = data.dtlnInitialized ? "Tersedia" : "Error";
+            setWorkerStatus(status);
+            if (data.dtlnInitialized) {
+              addLog("SUCCESS", "DTLN Worker siap digunakan");
+            } else {
+              addLog("ERROR", "DTLN Worker gagal inisialisasi");
+            }
             break;
           case "processedAudio":
             // Update processing stats from worker debug data - preserve raw values
@@ -354,7 +410,13 @@ export function useDTLN(config: DTLNConfig) {
             }
             break;
           case "dtlnStatus":
-            setWorkerStatus(data.initialized ? "Tersedia" : "Error");
+            const dtlnStatus = data.initialized ? "Tersedia" : "Error";
+            setWorkerStatus(dtlnStatus);
+            if (data.initialized) {
+              addLog("SUCCESS", "DTLN model berhasil dimuat");
+            } else {
+              addLog("ERROR", "DTLN model gagal dimuat");
+            }
             break;
           case "spectogramData":
             setSpectogramData({
@@ -366,9 +428,12 @@ export function useDTLN(config: DTLNConfig) {
         }
       };
 
-      workerRef.current.onerror = () => {
+      workerRef.current.onerror = (error) => {
+        addLog("ERROR", `Worker error: ${error.message || "Unknown error"}`);
         setWorkerStatus("Error");
       };
+
+      addLog("DTLN", "Memuat model ONNX...");
 
       // Initialize worker with mobile-adaptive configuration
       workerRef.current.postMessage({
@@ -384,11 +449,13 @@ export function useDTLN(config: DTLNConfig) {
         performanceConfig: {
           isMobile: AudioConfig.isMobile,
           processingMode: AudioConfig.isMobile ? "lightweight" : "full",
-          frameSkipping: AudioConfig.isMobile ? 2 : 1, // Skip every 2nd frame on mobile
-          spectogramRate: AudioConfig.isMobile ? 0.3 : 0.8, // Reduce spectogram frequency
+          frameSkipping: AudioConfig.isMobile ? 2 : 1,
+          spectogramRate: AudioConfig.isMobile ? 0.3 : 0.8,
         },
       });
-    } catch {
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      addLog("ERROR", `Worker gagal: ${errorMsg}`);
       setWorkerStatus("Error");
       return false;
     }
@@ -399,6 +466,7 @@ export function useDTLN(config: DTLNConfig) {
     config.model1Path,
     config.model2Path,
     config.sampleRate,
+    addLog,
   ]);
 
   // Progress tracking
@@ -692,6 +760,8 @@ export function useDTLN(config: DTLNConfig) {
       }
 
       try {
+        addLog("DTLN", "Memulai pemrosesan audio realtime...");
+
         // Reset state
         resetProcessingState();
 
@@ -699,9 +769,17 @@ export function useDTLN(config: DTLNConfig) {
         setIsProcessing(true);
         progressTrackingRef.current = true;
 
+        addLog(
+          "DTLN",
+          `Memproses audio: ${buffer.duration.toFixed(2)}s, ${
+            buffer.sampleRate
+          }Hz`
+        );
+
         // Resume context first to ensure stable timing
         if (audioContextRef.current.state === "suspended") {
           await audioContextRef.current.resume();
+          addLog("DTLN", "Audio context resumed");
         }
 
         // Wait for stable context
@@ -712,6 +790,7 @@ export function useDTLN(config: DTLNConfig) {
 
         // Start recording with original buffer reference
         await startRecording(buffer.duration, buffer);
+        addLog("DTLN", "Perekaman output dimulai");
 
         // Reset progress
         setProgress({
@@ -752,15 +831,20 @@ export function useDTLN(config: DTLNConfig) {
 
         // Set up completion handler
         audioSourceRef.current.onended = () => {
+          addLog("SUCCESS", "Pemrosesan audio selesai");
           handleProcessingComplete();
         };
 
         // Start processing immediately after setup
         audioSourceRef.current.start(0);
+        addLog("DTLN", "Pemrosesan audio dimulai");
 
         // Start progress tracking
         startProgressTracking(buffer.duration);
       } catch (error) {
+        const errorMsg =
+          error instanceof Error ? error.message : "Unknown error";
+        addLog("ERROR", `Pemrosesan gagal: ${errorMsg}`);
         resetProcessingState();
         throw error;
       }
@@ -772,6 +856,7 @@ export function useDTLN(config: DTLNConfig) {
       startProgressTracking,
       resetProcessingState,
       startRecording,
+      addLog,
     ]
   );
 

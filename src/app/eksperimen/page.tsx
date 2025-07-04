@@ -8,7 +8,7 @@ import { UploadFileSection } from "@/components/experiment/upload-file-section";
 import { PerformanceChartsSection } from "@/components/experiment/performance-charts-section";
 import { WebRTCSection } from "@/components/experiment/webrtc-section";
 import { SpectogramSection } from "@/components/experiment/spectogram-section";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 
 const DTLN_CONFIG = {
   workerPath: "/workers/dtln.worker.js",
@@ -18,7 +18,24 @@ const DTLN_CONFIG = {
   model2Path: "/models/dtln_model_2.onnx",
 } as const;
 
+interface LogEntry {
+  timestamp: string;
+  type: string;
+  message: string;
+}
+
 export default function Experiment() {
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+
+  // Log handler
+  const handleLog = useCallback((log: LogEntry) => {
+    setLogs((prev) => {
+      const newLogs = [...prev, log];
+      // Keep only last 100 logs to prevent memory issues
+      return newLogs.slice(-100);
+    });
+  }, []);
+
   const {
     createCall,
     joinCall,
@@ -26,7 +43,7 @@ export default function Experiment() {
     remoteStatus,
     isCallActive,
     remoteStream,
-  } = useWebRTC();
+  } = useWebRTC(handleLog);
 
   const {
     workletStatus,
@@ -41,7 +58,7 @@ export default function Experiment() {
     spectogramData,
     processedAudioBuffer,
     exportWAV,
-  } = useDTLN(DTLN_CONFIG);
+  } = useDTLN(DTLN_CONFIG, handleLog);
 
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
 
@@ -159,10 +176,7 @@ export default function Experiment() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-6xl space-y-8">
-        <HeaderPage
-          title="Eksperimen"
-          description="Uji coba WebRTC & DTLN"
-        />
+        <HeaderPage title="Eksperimen" description="Uji coba WebRTC & DTLN" />
 
         {/* Remote Audio Element - Hidden controls */}
         <audio
@@ -212,7 +226,8 @@ export default function Experiment() {
                     Panggilan
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Buat atau gabung dengan kode, lalu pastikan status lokal dan remote terhubung.
+                    Buat atau gabung dengan kode, lalu pastikan status lokal dan
+                    remote terhubung.
                   </p>
                 </div>
               </div>
@@ -237,9 +252,7 @@ export default function Experiment() {
                   3
                 </div>
                 <div className="text-left">
-                  <h2 className="text-2xl font-bold tracking-tight">
-                    Unggah
-                  </h2>
+                  <h2 className="text-2xl font-bold tracking-tight">Unggah</h2>
                   <p className="text-sm text-muted-foreground mt-1">
                     Pilih audio lalu akan diproses secara realtime.
                   </p>
@@ -257,6 +270,7 @@ export default function Experiment() {
                 remoteStatus={remoteStatus}
                 processedAudioBuffer={processedAudioBuffer}
                 onExportWAV={exportWAV}
+                logs={logs}
               />
             </div>
           </div>
