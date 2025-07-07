@@ -14,9 +14,9 @@ export default function Home() {
         {/* Hero Section - Title Outside Card */}
         <div className="mt-8 space-y-6 text-center">
           <h1 className="text-xl font-bold leading-tight tracking-tight md:text-2xl lg:text-3xl">
-            ANALISIS PENERAPAN REAL-TIME NOISE SUPPRESSION PEER-TO-PEER WEBRTC
-            DENGAN METODE PRE-TRAINED DTLN (DUAL-SIGNAL TRANSFORMATION LSTM
-            NETWORK)
+            IMPLEMENTASI REAL-TIME NOISE SUPPRESSION PADA KOMUNIKASI
+            PEER-TO-PEER WEBRTC MENGGUNAKAN METODE PRE-TRAINED DTLN (DUAL-SIGNAL
+            TRANSFORMATION LSTM NETWORK)
           </h1>
         </div>
 
@@ -59,12 +59,14 @@ export default function Home() {
               <div className="pl-18 space-y-4">
                 <ol className="text-muted-foreground text-lg leading-relaxed space-y-3 list-decimal list-inside">
                   <li>
-                    Bagaimana mengidentifikasi pengaruh gangguan suara external
-                    terhadap keaslian suara?
+                    Bagaimana merancang dan membangun sistem real-time noise
+                    suppression pada komunikasi WebRTC dengan menerapkan metode
+                    pre-trained DTLN?
                   </li>
                   <li>
-                    Bagaimana meningkatkan kualitas audio secara realtime dalam
-                    komunikasi berbasis WebRTC?
+                    Bagaimana menguji performa sistem yang telah dibangun untuk
+                    membuktikan bahwa metode DTLN efektif dalam meningkatkan
+                    kualitas audio pada komunikasi WebRTC?
                   </li>
                 </ol>
               </div>
@@ -129,12 +131,14 @@ export default function Home() {
               <div className="pl-18 space-y-4">
                 <ol className="text-muted-foreground text-lg leading-relaxed space-y-3 list-decimal list-inside">
                   <li>
-                    Menganalisis real-time noise suppression dengan model DTLN
-                    dapat meningkatkan kualitas suara peer-to-peer WebRTC.
+                    Mengimplementasikan metode pre-trained DTLN untuk membangun
+                    sebuah sistem yang mampu menekan noise secara real-time
+                    dalam aplikasi komunikasi peer-to-peer WebRTC.
                   </li>
                   <li>
-                    Mengidentifikasi dalam penerapan real-time noise suppression
-                    dengan model DTLN.
+                    Melakukan pengujian untuk mengukur dan menganalisis
+                    kemampuan sistem dalam mengurangi noise serta meningkatkan
+                    kualitas audio, sebagai bukti keberhasilan implementasi.
                   </li>
                 </ol>
               </div>
