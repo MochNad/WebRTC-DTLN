@@ -30,7 +30,7 @@ WebRTC-DTLN menggabungkan:
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/username/WebRTC-DTLN.git
+git clone https://github.com/MochNad/WebRTC-DTLN.git
 cd WebRTC-DTLN
 ```
 
@@ -76,16 +76,16 @@ Download dataset audio dari [Dataset-DTLN Repository](https://github.com/MochNad
 
 ```bash
 # Menggunakan npm
-npm run dev -- --experimental-https
+npm run dev
 
 # Atau menggunakan yarn
-yarn dev -- --experimental-https
+yarn dev
 
 # Atau menggunakan pnpm
-pnpm dev -- --experimental-https
+pnpm dev
 
 # Atau menggunakan bun
-bun dev -- --experimental-https
+bun dev
 ```
 
 ### 6. Akses Aplikasi
@@ -97,6 +97,6 @@ Setelah server berjalan, Anda dapat mengakses aplikasi melalui:
 
 **Catatan**:
 
-- IP address akan otomatis ditampilkan di terminal saat menjalankan `npm run dev -- --experimental-https`
+- IP address akan otomatis ditampilkan di terminal saat menjalankan `npm run dev`
 - IP address bervariasi tergantung jaringan (WiFi/Ethernet) yang digunakan
 - Untuk testing peer-to-peer, pastikan semua perangkat terhubung ke jaringan yang sama
